@@ -12,14 +12,18 @@ import static org.hamcrest.Matchers.*;
 @RoqAndRoll
 public class RoqBlogTest {
 
+    public static final String TITLE = "Hello, world! I’m Roq — a fun little SSG (Static Site Generator) with a Java soul and Quarkus energy.";
+    public static final String DESCRIPTION = "A static site generator (SSG) that makes it fun and easy to build websites and blogs.";
+
     @Test
     public void testIndex() {
         RestAssured.when().get("/").then().statusCode(200)
                 .log()
                 .everything().body(containsString(
-                        "A Static Site Generator to easily create a static website or blog using Quarkus super-powers."))
-                .body(containsString("Hello, world! I&#39;m Roq")).body(containsString("minute(s) read"))
-                .body(containsString("Page 1 of")).body(containsString("&copy; ROQ"));
+                        TITLE))
+                .body(containsString(DESCRIPTION)).body(containsString("minute(s) read"))
+                .body(containsString("Page 1 of")).body(containsString("&copy; ROQ"))
+                .body(containsString("<a href=\"https://central.sonatype.com/artifact/io.quarkiverse.roq/quarkus-roq-project-parent\" rel=\"nofollow\">"));
     }
 
     @Test
@@ -36,7 +40,7 @@ public class RoqBlogTest {
     @Test
     public void testPosts() {
         RestAssured.when().get("/posts/welcome-to-roq").then().statusCode(200).body(containsString(
-                        "A Static Site Generator to easily create a static website or blog using Quarkus super-powers."))
+                        TITLE))
                 .body(containsString("<p>Hello folks,</p>"))
                 .body(containsString("<h1 class=\"page-title\">Welcome to Roq!</h1>"))
                 .body(containsString("&copy; ROQ"));
@@ -54,7 +58,7 @@ public class RoqBlogTest {
     @Test
     public void testPage() {
         RestAssured.when().get("/events").then().statusCode(200).body(containsString(
-                        "A Static Site Generator to easily create a static website or blog using Quarkus super-powers."))
+                        TITLE))
                 .body(containsString("<h2 class=\"event-title\">Roq 1.0 Beta</h2>"))
                 .body(containsString("&copy; ROQ"));
     }

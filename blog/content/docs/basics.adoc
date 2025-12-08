@@ -1,38 +1,62 @@
----
-title: Basics
-layout: doc
----
-{#include partials/doc/doc-attributes.adoc/}
-
 = Roq the basics
+include::../../includes/attributes.adoc[]
+:doc-name: basics
 
-{#include partials/doc/edit-contrib.adoc name="basics" /}
+include::../../includes/edit-contrib.adoc[]
 
 By default, your site files should be located in the **project root directory** (or in the Java resources dir: `src/main/resources/`).
 
-{#include partials/doc/directory-structure.adoc /}
+include::../../includes/directory-structure.adoc[]
 
 == Qute and FrontMatter
 
 All templates may use the awesome type-safe https://quarkus.io/guides/qute-reference[Qute] template engine.
 
-TIP: Type-safety doesn't make it more complex, it just means that using wrong variables and such will result in build error. This way it won't leak in production.
+[TIP]
+====
+Type-safety doesn't make it more complex—it just means that using wrong variables will result in a build error.  
+This prevents issues from leaking into production.
+====
 
-Templates for layout, documents and pages may also declare a FrontMatter (referred as FM data) header delimited by  two `---`.
-This header contains yaml data used to configure many things such as:
+Templates for layouts, documents, and pages may also declare a FrontMatter (FM) header, delimited by two `---`.  
+This header contains YAML data used to configure things like:
 
 * Routing
-* Data for the templates
+* Data for templates
 * Content generation
 * Pagination
 
+For example, a page template `blog-post.html` might start with:
+
+[source,yaml]
+----
+---
+title: "My First Blog Post"
+date: 2025-09-08
+author: "Andy"
+layout: post
+tags: qute, roq, tutorial
+---
+
+**Hello World**
+----
+
 == Content
 
-The `content/` directory contains the index page and all the pages and collections (such as blog posts). It may also contain attached static files (<<page-files>>).
+The `content/` directory contains the <<site-index, site index page>> and all the <<pages>> and <<collections>> (such as blog posts). It may also contain attached static files (<<page-files>>).
+Content templates can be written in `html`, `json`, `yaml`, `yml`, or `xml` or using <<Markup languages>>.
 
 NOTE: We sometimes refer to pages in collections as documents, documents are just a special kind of pages.
 
-== Layouts and Partials
+[#templates]
+== Templates (Layouts, Partials, and User Tags)
+
+Layouts, partials, and user tags are templates and must use one of the following extensions:  
+`html`, `xhtml`, `htm`, `json`, `yaml`, `yml`, or `xml`.
+
+INFO: `.md` and `.adoc` files are not parsed as templates. Instead, you can use markup inside templates through Qute sections `{#md}` and `{#adoc}`, provided the corresponding <<Markup languages,plugins>> are available.
+
+=== Layouts 
 
 For your site, you will have one or more kind of pages, this is what we call "layouts", located by default in `templates/layouts/`. For example:
 
@@ -41,22 +65,21 @@ For your site, you will have one or more kind of pages, this is what we call "la
 * `post`: the layout for blog posts
 * `recipe`: the layout for recipes or whatever
 
-A layout may be specified in pages through the `layout` FrontMatter key (e.g. `layout: page`). By default, `posts` will use the `post` layout and normal pages the `page` layout (this can be configured through link:{site.url('docs/advanced/')}#quarkus-roq-frontmatter_site-page-layout[site configuration]).
+A layout may be specified in pages through the `layout` FrontMatter key (e.g., `layout: page`). By default (if the content of the file is not a full HTML page — i.e., it does not contain a `<html>` tag or `<!DOCTYPE` declaration), `posts` will use the `post` layout and normal pages will use the `page` layout. This can be configured through xref:advanced.adoc#quarkus-roq-frontmatter_site-page-layout[site configuration].
 
-TIP: Roq layouts are using the Qute `include` section under the hood to achieve template inheritance. For more details, see the Qute documentation on includes: https://quarkus.io/guides/qute-reference#include_helper[Qute includes]. Unlike partials, layouts can also define Frontmatter data, which is inherited along with the template structure.
-
-You can also prepare partial templates. They are located by default in `templates/partials/`. For example:
-
-* `pagination.html`
-* `head.html`
+TIP: Roq layouts are using the Qute `include` section under the hood to achieve template inheritance. For more details, see the Qute documentation on includes: https://quarkus.io/guides/qute-reference#include_helper[Qute includes]. Unlike <<partials, partials>>, layouts can also define Frontmatter data, which is inherited along with the template structure.
 
 NOTE: if you don't already have layouts and partials in your project, <<install-theme>> or create your own templates (https://github.com/quarkiverse/quarkus-roq/tree/main/roq-theme/default/src/main/resources/templates[example templates]).
 
-=== How to create a layout page
+==== How to create a layout page
 
 If you’re using a theme, you can take advantage of its layouts, but you’re also free to add your own. Layouts are built on a powerful inheritance system, allowing flexibility and customization.
 
-TIP: When using a theme, you can create new layouts that extend the existing theme layouts or partially override them to better suit your needs. Learn more here: link:{site.url('docs/advanced/')}#overriding-theme[Overriding Theme].
+// https://excalidraw.com/#json=NMbfajh74vODDIkfujKt8,0M5Vbhdd3oN02Nn-dgcbiw
+image::roq-layouts.png[Roq - Layouts]
+
+TIP: When using a theme, you can create new layouts that extend the existing theme layouts or partially override them to better suit your needs. Learn more here: xref:advanced.adoc#overriding-theme[Overriding Theme].
+
 
 In this sample we will create a simple 3 steps inheritance layout. All below files should be located in the `templates/layouts/` directory.
 
@@ -70,10 +93,10 @@ To do so, you will first need a `default.html` file as followed:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>\{page.title}</title> <1>
+    <title>{page.title}</title> <1>
 </head>
 <body>
-    \{#insert /} <2>
+    {#insert /} <2>
 </body>
 </html>
 ----
@@ -86,11 +109,11 @@ Then you can create a `main.html` file as followed:
 .main.html
 ----
 ---
-layout: :default <1>
+layout: default <1>
 title: And now for something completely different <2>
 ---
 <header> Head </header>
-\{#insert /}
+{#insert /}
 <footer> Toes </footer>
 ----
 <1> Uses the `default` layout.
@@ -102,9 +125,9 @@ Finally, you can create a `content.html` file as followed:
 .content.html
 ----
 ---
-layout: :main <1>
+layout: main <1>
 ---
-\{#include partials/image /} <2>
+{#include partials/image /} <2>
 knees
 ----
 <1> Uses the `main` layout.
@@ -133,21 +156,57 @@ Then it will be rendered as followed:
 To summarize, each page will be rendered using their parent layout _recursively_. The inheritance system works for the page content as mush as for the FrontMatter data.
 
 
+=== Partials
 
-[#partials]
-=== What are `partials` ?
+You can split layouts into partial, reusable templates.  
+**Partials** make it easier to maintain different sections of your layouts. By default, they are located in `templates/partials/`.
 
-Partials work the other way around. They are bits of qute template fragment that cannot live by there own. You can include in any other templates. Let's say I want to have a description for each of my images. I can create an image.html partial in the `templates/partials/` directory:
+For example:
+
+➡️ `templates/partials/pagination.html`  
+  can be included using: `{#include partials/pagination /}`
+
+=== Tags
+
+Tags (User Tags) are custom reusable snippets of code, similar to small components.  
+They help reduce duplication and let you create reusable sections.
+
+For example, create a tag in `templates/partials/post-link.html`:
 
 [source,html]
-.title.html
 ----
-<img src="https://supersimple.com/wp-content/uploads/head-shoulders-knees-and-toes-flashcards-726x1024.png" alt="Illustration" />
+{@io.quarkiverse.roq.frontmatter.runtime.model.DocumentPage post}
+<div class="post-link">
+    <a href="{post.url}">
+      <img src="{post.image}" alt="{post.title}" class="post-image"/>
+      <h3>{post.title}</h3>
+      <p>{post.description}</p>
+    </a>
+</div>
 ----
 
-Then I can include it in my content page:
+You can then use it in another template like this :
 
-`\{#include partials/image /}`
+[source,html]
+----
+{#post-link post=site.document('posts/2025-09-08-my-article.md')/}
+----
+
+This would render a styled card linking to the given `DocumentPage` post.
+
+[TIP]
+====
+You can reference pages and documents by their source path.
+
+For example:
+
+* `site.document('posts/2025-09-08-my-article.md')`
+* `site.page('about.md')`
+==== 
+
+To learn more, see the https://quarkus.io/guides/qute-reference#user_tags[Qute User Tags guide,window=_blank].
+
+
 
 [#install-theme]
 == Install a theme
@@ -163,13 +222,13 @@ To install a theme, simply add the dependency to your pom.xml. Example with Roq'
 ----
 
 
-It will provide templates, scripts and styles for your site. To use a theme layout, refer to it with `:theme/` prefix (there is an example in the next part). For advanced usage, refer to the link:{site.url('docs/advanced')}#themes[*Theme section*].
+It will provide templates, scripts and styles for your site. To use a theme layout, refer to it with `:theme/` prefix (there is an example in the next part). For advanced usage, refer to the xref:advanced.adoc#themes[*Theme section*].
 
-== Site index template
+[#site-index]
+== Site index
 
-Your site index template is required and should be located in `content/index.html`.
+Your site index page is required and should be located in `content/index.html` (you can also use a markup extension).
 
-{|
 [source,html]
 .content/index.html
 ----
@@ -185,7 +244,7 @@ layout: :theme/index //<2>
 
 <p>
   With Roq, it is very easy to a link to another.
-  <a href="{site.url('/roq-bottom')}">page</a>. // <3>
+  <a href="{site.url('/roq-page')}">page</a>. // <3>
 </p>
 
 ----
@@ -194,17 +253,13 @@ layout: :theme/index //<2>
 <2> The layout to use (in this case `:theme/index` which refers to the `index` layout from the theme).
 <3> We use the `{site.url(path)}` using Qute to manual resolve other pages urls.
 
-|}
-
-TIP: There are different ways to link your pages as explained in the  link:{site.url('docs/advanced')}#links[Links & Urls] section.
+TIP: There are different ways to link your pages as explained in the  link:{site-baseurl}docs/advanced#links[Links & Urls] section.
 
 == Variables
 
-{|
-
 You can use Qute to access site and pages data. For this use the `site` and `page` variables:
 
-* The `site` variable allow to access site global info from any page, document, layout or partial.
+* The `site` (link:{roqjavadocmodelurl}model/Site.html[javadoc,window=_blank]) variable allow to access site global info from any page, document, layout or partial.
 +
 .Show attributes
 [%collapsible]
@@ -271,7 +326,7 @@ You can use Qute to access site and pages data. For this use the `site` and `pag
 |===
 ====
 
-* The `page` variable is available in pages, documents, layouts, and partials. It contains the info for the page it is used from.
+* The `page` (link:{roqjavadocmodelurl}model/Page.html[javadoc,window=_blank]) variable is available in pages, documents, layouts, and partials. It contains the info for the page it is used from.
 +
 .Show attributes
 [%collapsible]
@@ -285,9 +340,9 @@ You can use Qute to access site and pages data. For this use the `site` and `pag
 | The URL to this page
 | `http://example.com/about`
 
-| `page.info`
-| `PageInfo`
-| The page info (file name, ...)
+| `page.source`
+| `Origin`
+| The page source (file name, ...)
 |
 
 | `page.data`
@@ -332,20 +387,17 @@ You can use Qute to access site and pages data. For this use the `site` and `pag
 
 | `page.date`
 | `ZonedDateTime`
-| The publication date of the page
+| The publication date of the page or null
 | `2023-10-01T12:00:00Z`
 |===
 ====
 
-|}
-
 == Pages
 
-Any template file without the `_` prefix in the site `content/` directory (and subdirectories) will be scanned as pages.
+Any <<content, content template file>> without the `_` prefix in the site `content/` directory (and subdirectories) will be scanned as pages.
 
-Let's create your first page and spice things up a bit by using Markdown.
+Let's create your first page and spice things up a bit by using Markdown (included by default with Roq).
 
-{|
 [source,markdown]
 .roq-bottom.md
 ----
@@ -370,7 +422,25 @@ __{page.data.the-rope}!__ <3>
 <1> you can use `link` to give this page a custom link (by default it will use the file-name).
 <2> you can add other FM data.
 <3> FM data is available through `page.data`.
-|}
+
+== Markup languages
+
+You can use different markup languages in Roq content.
+
+=== Markdown
+
+Roq ships with Markdown support out of the box (powered by https://github.com/commonmark/commonmark-java[commonmark-java,window=_blank]).  
+To write pages or documents in Markdown, simply use the `.md` or `.markdown` file extension.
+
+[TIP]
+====
+If you don’t need Markdown, you can disable it by excluding the Markdown plugin from the Roq extension in your `pom.xml`.
+====
+
+=== AsciiDoc
+
+AsciiDoc is also fully supported in Roq via the xref:plugins.adoc#plugin-asciidoc[AsciiDoc plugin].
+Once installed, to write pages or documents in AsciiDoc, simply use the `.adoc` or `.asciidoc` file extension.
 
 == Global data
 
@@ -384,8 +454,94 @@ For example:
 bar: Roq
 ----
 
-Can be access with `\{cdi:foo.bar}` in any template.
+Can be access with `{cdi:foo.bar}` in any template.
 
+== Template Extensions
+
+The Qute templating language supports a concept called https://quarkus.io/guides/qute#template-extension-methods[template extension methods]. These methods allow us to add functional to types and expose it in our templates. Moving logic from the template to Java code gives us the ability to use a more robust language for more complex logic and makes the functionality more easily reusable,as well as keeping our templates clean:
+
+- Qute provides https://quarkus.io/guides/qute-reference#built-in-template-extension[built-in template extensions,window=_blank]
+- Roq has several built-in template extensions (link:{roqjavadocmodelurl}RoqTemplateExtension.html[javadoc,window=_blank]):
+
+[cols="1,2", options="header"]
+|===
+| Usage in a Qute template | Description
+
+| ``text.numberOfWords``
+| Returns the number of words in the string
+
+| ``text.wordLimit(limit)``
+| Returns the text limited to `limit` words, adds "..." if truncated
+
+| ``text.slugify``
+| Returns a slugified version of the text
+
+| ``htmlContent.contentAbstract(limit)``
+| Returns the HTML content limited to `limit` words
+
+| ``htmlContent.stripHtml``
+| Returns the text with all HTML tags removed
+
+| ``page.readTime``
+| Returns the estimated reading time in minutes for the page content
+
+| ``page.contentAbstract``
+| Returns the first 75 words of the page content
+
+| ``page.contentAbstract(limit)``
+| Returns the page content limited to `limit` words
+
+| ``list.randomise``
+| Returns the list in random order
+
+| ``jsonArray.asJsonObjects``
+| Returns a list of JsonObject. All items must be JSON objects.
+
+| ``collections.collection(key)``
+| Returns the collection for the given key
+
+| ``posts.filter(key, value)``
+| Returns only documents matching the front-matter key/value
+
+| ``posts.future``
+| Returns only documents dated in the future
+
+| ``posts.past``
+| Returns only documents dated in the past
+
+| ``posts.sortBy(key, reverse)``
+| Sorts documents by a front-matter key (string), optionally reversed
+
+| ``posts.sortByDate(reverse)``
+| Sorts documents by date, optionally reversed
+
+| ``field.asStrings``
+| Normalizes a front-matter field into a list of strings
+
+| ``fileName.mimeType``
+| Returns the MIME type based on the file name extension
+|===
+
+You can provide your own template extensions by adding a class to your projects `src/main/java` directory and annotating either class or the `public static` method with `@TemplateExtension`:
+
+[source,java]
+-----
+public class Extensions {
+    @TemplateExtension
+    public static String doSomething(String text) {
+        // ....
+    }
+}
+-----
+
+and then you can use that extension in your template:
+
+[source,asciidoc]
+-----
+{site.pageContent(page).doSomething}
+-----
+
+For more details, see the https://quarkus.io/guides/qute#template-extension-methods[Quarkus] and https://quarkus.io/guides/qute-reference#virtual_methods[Qute] documentation.
 
 == Collections
 
@@ -394,7 +550,6 @@ Once created you can easily iterate and link to them.
 
 By default, Roq is configured with a `posts` collection using the `content/posts` directory. Let's create our first post:
 
-{|
 [source,markdown]
 .content/posts/2024-10-14-roq-solid.md
 ----
@@ -430,14 +585,12 @@ Here is a list of puns suggested by Chat GPT:
 15.	Stone Cold Roq – Referring to something very cool or emotionless.
 
 ----
-|}
 <1> This time we use the `post` layout from the theme.
-<2> You can define tags (see link:{site.url('docs/plugins')}#plugin-tagging[Plugins] to create pages for tags).
+<2> You can define tags (see xref:plugins.adoc#plugin-tagging[Plugins] to create pages for tags).
 <3> You have shortcut on the `page` to access `title` and `description`.
 
 Ok, to dive a bit deeper, we could create a json listing all posts with some info:
 
-{|
 [source,html]
 .content/posts.json
 ----
@@ -453,13 +606,30 @@ Ok, to dive a bit deeper, we could create a json listing all posts with some inf
 {/for}
 ]
 ----
-<1> You can use `site.collections.[collection id]` to access the full list of documents (it is also possible to  link:{site.url('docs/advanced/')}#pagination[paginate]).
+<1> You can use `site.collections.[collection id]` to access the full list of documents (it is also possible to  xref:advanced.adoc#pagination[paginate]).
 <2> `post.image` is smart and is already resolved to the image url (as a RoqUrl), `absolute` to get the absolute url.
 <3> `post.url` contains the post url (as a RoqUrl), you could also use `absolute` to get the absolute url.
 <4> `post.date` returns a `ZonedDateTime` and can be formatted the way you want.
 <5> `post.readTime` is a Qute template extension which compute the read time based on the post content.
 
-|}
+=== Draft and Future
+
+To create a draft page or document, you can use the frontmatter field `draft: true`. Drafts won’t be visible when published unless you set `%dev.site.draft=true` in your Quarkus configuration (the `%dev` makes it apply only in dev mode).
+
+You can also place draft documents (for collections) in a `drafts/` (e.g. `posts/drafts/`) directory.
+
+TIP: You may also start quarkus with the option: `quarkus dev -Dsite.draft`.
+
+By default, documents with a date in the future (FrontMatter data or file name) will not be visible unless you have `%dev.site.future=true` in your Quarkus configuration (the `%dev`makes it only available in dev-mode). 
+
+TIP: You may also start quarkus with the option: `quarkus dev -Dsite.future`.
+
+It is possible to configure a collection to always show future documents:
+[source,properties]
+----
+site.collections.events.future=true // <1> 
+----
+<1> Always show future documents for the "events" collection.
 
 === How to create custom collections?
 
@@ -492,24 +662,22 @@ site.collections.posts=true
 site.collections.posts.layout=":theme/post"
 ----
 
-NOTE: Since we're adding a new collection, it's also necessary to declare the existing `posts` collection to ensure it continues to function correctly.
+<1> We are adding the new collection `docs`;
+<2> Here, we are declaring the `docs` layout;
+<3> Finally, since the new collection is not a time-based collection, we need to set `future` as true to show all files.
 
-1. We are adding the new collection `docs`;
-2. Here, we are declaring the `docs` layout;
-3. Finally, since the new collection is not a time-based collection, we need to set `future` as true to show all files.
+NOTE: Since we're adding a new collection, it's also necessary to declare the existing `posts` collection to ensure it continues to function correctly.
 
 Now, we can access all the new collection `docs` data as follows:
 
-{|
 [source]
 ----
 {#for doc in site.collections.docs}
 - [{doc.title}]({doc.url})
 {/for}
 ----
-|}
 
-Since the new collection is also a normal page, we can use all variables described in the link:#_variables[variable section].
+Since the new collection is also a normal page, we can use all variables described in the link:#variables[variable section].
 
 [#site-static]
 == Site static files
@@ -562,11 +730,9 @@ The resulting link for a page can be different from its directory name, attached
 
 Let's imagine for a minute that the page link is `https://my-site.org/awesome-page/`, then the slide will be served on `https://my-site.org/awesome-page/slide.pdf`.
 
-{|
 You can use `{page.file("slide.pdf")}` to resolve the file url *and check that the file exists*. This is also useful in other cases, for example from another page (e.g. `{site.page("my-page/index.md").file("slide.pdf")}`) or if you want the absolute url (e.g. `{page.file("slide.pdf").absolute}`):
 
 TIP: If you want to iterate over page files, they can be listed using `{page.files}`.
-|}
 
 === Images
 
@@ -576,15 +742,15 @@ The site images should be added in the public image directory (e.g. `my-site/pub
 
 The default public path prefix for images is `images/` (this can be changed in the site configuration).
 
-Url can be accessed using the site variable as shown in this example: `<img src="\{site.image('image-1.png')`}" />.
+Url can be accessed using the site variable as shown in this example: `<img src="{site.image('image-1.png')`}" />.
 
-TIP: The image method is a convenience and is equivalent to using `<img src="\{site.file('images/image-1.png')`}" />.
+TIP: The image method is a convenience and is equivalent to using `<img src="{site.file('images/image-1.png')`}" />.
 
 ==== Page images
 
-When using pages as directories (such as `posts/surf/index.html`), `\{page.image(name)}` checks if the file is attached to the given page and return its url.
+When using pages as directories (such as `posts/surf/index.html`), `{page.image(name)}` checks if the file is attached to the given page and return its url.
 
-In other pages (such as `posts/basketball.md`), `\{page.image(name)}` will act the same as `site.image(name)` and resolve from the site image directory.
+In other pages (such as `posts/basketball.md`), `{page.image(name)}` will act the same as `site.image(name)` and resolve from the site image directory.
 
 Let's take this example structure:
 
@@ -611,7 +777,6 @@ my-site/
 
 Here is how to access those images from the article:
 
-{|
 [source,html]
 .surf-article/index.html
 ----
@@ -636,11 +801,9 @@ image: cover.jpg
 <4> `site.image(path)` looks into `/public/images/` by default (with disk checking).
 <5> render the absolute url (e.g. `https://my-site.org/images/basketball.png`)
 <6> this would throw an error!
-|}
 
 === Page & Site cover image
 
-{|
 Page cover image is referenced in the page FM `image` data.
 [source,yaml]
 .some-page.md
@@ -664,8 +827,6 @@ image: my-site.png
 
 It can be accessed in any template through `{site.image}`.
 
-|}
-
 == Styles and Javascript
 
 Here are two options to consume scripts and styles:
@@ -688,7 +849,6 @@ my-site/
 
 To include the generated bundle in your template, specify the bundle tag in the `html>head` tag:
 
-{|
 [source,html]
 .layouts/head.html
 ----
@@ -697,22 +857,8 @@ To include the generated bundle in your template, specify the bundle tag in the 
   {#bundle /}
 </head>
 ----
-|}
 
 It will be rendered with the relevant `<script>` and `<style>` tags to include your bundle.
 
 TIP: You may also consume and bundle npm dependencies among other cool things.
 For more info, read the https://docs.quarkiverse.io/quarkus-web-bundler/dev/[Quarkus Web Bundler documentation].
-
-== Asciidoc support
-
-Asciidoc is supported by Roq using link:{site.url('docs/plugins/')}#plugin-asciidoc[plugins].
-
-Using `&#123;something&#125;` will be parsed by Qute, to avoid issues with custom attributes, you can either escape it `&#92;&#123;something&#125;`, or wrap more content inside `&#123;|` and `|&#125;`.
-
-=== Includes
-
-The standard Asciidoc include is not supported, but you can use Qute includes instead:
-
-. Place your file in a folder under the `template` directory (for example `partials`)
-. Use Qute include directive `\{# partials/your_included_file.adoc /}` to include it

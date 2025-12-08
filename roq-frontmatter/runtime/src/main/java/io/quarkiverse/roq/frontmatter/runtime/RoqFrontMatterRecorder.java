@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 import io.quarkiverse.roq.frontmatter.runtime.config.ConfiguredCollection;
 import io.quarkiverse.roq.frontmatter.runtime.config.RoqSiteConfig;
 import io.quarkiverse.roq.frontmatter.runtime.model.*;
+import io.quarkus.runtime.LocalesBuildTimeConfig;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.vertx.http.runtime.VertxHttpBuildTimeConfig;
 import io.vertx.core.Handler;
@@ -23,10 +24,12 @@ public class RoqFrontMatterRecorder {
 
     private final VertxHttpBuildTimeConfig httpConfig;
     private final RoqSiteConfig config;
+    private final LocalesBuildTimeConfig locales;
 
-    public RoqFrontMatterRecorder(VertxHttpBuildTimeConfig httpConfig, RoqSiteConfig config) {
+    public RoqFrontMatterRecorder(VertxHttpBuildTimeConfig httpConfig, RoqSiteConfig config, LocalesBuildTimeConfig locales) {
         this.httpConfig = httpConfig;
         this.config = config;
+        this.locales = locales;
     }
 
     public Supplier<RoqCollections> createRoqCollections(
@@ -44,13 +47,13 @@ public class RoqFrontMatterRecorder {
         };
     }
 
-    public Supplier<NormalPage> createPage(RoqUrl url, PageInfo info, JsonObject data, Paginator paginator) {
-        return () -> new NormalPage(url, info, data, paginator);
+    public Supplier<NormalPage> createPage(RoqUrl url, PageSource source, JsonObject data, Paginator paginator) {
+        return () -> new NormalPage(url, source, data, paginator);
     }
 
-    public Supplier<DocumentPage> createDocument(String collection, RoqUrl url, PageInfo info, JsonObject data,
+    public Supplier<DocumentPage> createDocument(String collection, RoqUrl url, PageSource source, JsonObject data,
             boolean hidden) {
-        return () -> new DocumentPage(collection, url, info, data, hidden);
+        return () -> new DocumentPage(collection, url, source, data, hidden);
     }
 
     public Supplier<Site> createSite(RootUrl rootUrl, Supplier<NormalPage> indexPage,
@@ -66,6 +69,10 @@ public class RoqFrontMatterRecorder {
         };
     }
 
+    public Supplier<Sources> createSources(List<TemplateSource> list) {
+        return () -> new Sources(list);
+    }
+
     public Consumer<Route> initializeRoute() {
         return r -> {
             r.method(HttpMethod.GET);
@@ -75,10 +82,11 @@ public class RoqFrontMatterRecorder {
 
     public Handler<RoutingContext> handler(String rootPath,
             Map<String, Supplier<? extends Page>> pageSuppliers) {
-        return new RoqRouteHandler(rootPath, httpConfig, pageSuppliers);
+        return new RoqRouteHandler(rootPath, httpConfig, pageSuppliers, config, locales);
     }
 
     public Handler<RoutingContext> aliasRoute(String target) {
         return ctx -> ctx.redirect(target);
     }
+
 }

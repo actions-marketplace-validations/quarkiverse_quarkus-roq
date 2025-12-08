@@ -65,15 +65,12 @@ class RoqGeneratorProcessor {
     }
 
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    void initHandler(
+    public BuildSelectionBuildItem initBuildSelection(
             RoqGeneratorConfig config,
             List<GeneratedStaticResourceBuildItem> generatedStaticResources,
             List<NotFoundPageDisplayableEndpointBuildItem> notFoundPageDisplayableEndpoints,
             List<SelectedPathBuildItem> selectedPaths,
-            StaticResourcesBuildItem staticResourcesBuildItem,
-            OutputTargetBuildItem outputTarget,
-            RoqGeneratorRecorder recorder) {
+            StaticResourcesBuildItem staticResourcesBuildItem) {
         Set<String> staticPaths = new HashSet<>();
         if (staticResourcesBuildItem != null) {
             staticPaths.addAll(staticResourcesBuildItem.getPaths().stream().map(PathUtils::prefixWithSlash).toList());
@@ -92,8 +89,24 @@ class RoqGeneratorProcessor {
         final Map<String, StaticFile> staticFiles = new HashMap<>();
         final RoqSelection buildSelectedPaths = getSelectedPaths(config, selectedPathsFromBuildItems,
                 generatedStaticResourcesMap, staticPaths, staticFiles);
-        recorder.setBuildSelectedPaths(buildSelectedPaths);
-        recorder.setStaticFiles(staticFiles);
+        return new BuildSelectionBuildItem(staticFiles, buildSelectedPaths);
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    void initStaticFiles(
+            BuildSelectionBuildItem buildSelection,
+            RoqGeneratorRecorder recorder) {
+        recorder.setStaticFiles(buildSelection.staticFiles());
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    void initSelection(
+            BuildSelectionBuildItem buildSelection,
+            OutputTargetBuildItem outputTarget,
+            RoqGeneratorRecorder recorder) {
+        recorder.setBuildSelectedPaths(buildSelection.selectedPaths());
         recorder.setOutputTarget(outputTarget.getOutputDirectory().toAbsolutePath().toString());
     }
 
@@ -107,13 +120,13 @@ class RoqGeneratorProcessor {
             final String path = PathUtils.prefixWithSlash(e.getKey());
             addStaticFileIfPresent(generatedStaticResourcesMap, path, staticFiles);
             selectedPaths.add(SelectedPath.builder().path(path).outputPath(e.getValue())
-                    .source(PageSource.CONFIG).build());
+                    .source(Origin.CONFIG).build());
         }
         for (String p : config.paths().orElse(List.of())) {
             if (!isGlobPattern(p) && p.startsWith("/")) {
                 // fixed paths are directly added
                 addStaticFileIfPresent(generatedStaticResourcesMap, p, staticFiles);
-                selectedPaths.add(SelectedPath.builder().path(p).source(PageSource.CONFIG).build());
+                selectedPaths.add(SelectedPath.builder().path(p).source(Origin.CONFIG).build());
                 continue;
             }
             if (staticPaths != null) {
@@ -124,14 +137,14 @@ class RoqGeneratorProcessor {
                     if (matcher.matches(Path.of(path))) {
                         addStaticFileIfPresent(generatedStaticResourcesMap, path, staticFiles);
                         selectedPaths.add(
-                                SelectedPath.builder().source(PageSource.CONFIG).path(path).build());
+                                SelectedPath.builder().source(Origin.CONFIG).path(path).build());
                     }
                 }
             }
 
         }
         for (var e : selectedPathsFromBuildItem.entrySet()) {
-            selectedPaths.add(SelectedPath.builder().source(PageSource.BUILD_ITEM).path(e.getKey())
+            selectedPaths.add(SelectedPath.builder().source(Origin.BUILD_ITEM).path(e.getKey())
                     .outputPath(e.getValue()).build());
             addStaticFileIfPresent(generatedStaticResourcesMap, e.getKey(), staticFiles);
         }
@@ -144,7 +157,7 @@ class RoqGeneratorProcessor {
             Map<String, StaticFile> staticFiles) {
         if (generatedStaticResourcesMap.containsKey(path)) {
             final GeneratedStaticResourceBuildItem generatedItem = generatedStaticResourcesMap.get(path);
-            if (generatedItem.isFile()) {
+            if (generatedItem.isFile() && generatedItem.getFile().getFileSystem().provider().getScheme().equals("file")) {
                 staticFiles.put(path,
                         new StaticFile(generatedItem.getFileAbsolutePath(), StaticFile.FetchType.FILE));
             } else {

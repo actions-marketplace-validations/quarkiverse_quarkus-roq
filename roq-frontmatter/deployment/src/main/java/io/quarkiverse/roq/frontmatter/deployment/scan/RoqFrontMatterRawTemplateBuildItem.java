@@ -3,8 +3,9 @@ package io.quarkiverse.roq.frontmatter.deployment.scan;
 import java.nio.file.Path;
 import java.util.List;
 
+import io.quarkiverse.roq.frontmatter.deployment.data.RoqFrontMatterLayoutTemplateBuildItem;
 import io.quarkiverse.roq.frontmatter.runtime.config.ConfiguredCollection;
-import io.quarkiverse.roq.frontmatter.runtime.model.PageInfo;
+import io.quarkiverse.roq.frontmatter.runtime.model.TemplateSource;
 import io.quarkus.builder.item.MultiBuildItem;
 import io.vertx.core.json.JsonObject;
 
@@ -12,7 +13,7 @@ import io.vertx.core.json.JsonObject;
  * A build item representing a Roq FM file.
  * This template is just extracted from the disk, data is not yet merged with layouts.
  * <p>
- * Use {@link io.quarkiverse.roq.frontmatter.deployment.data.RoqFrontMatterTemplateBuildItem} to read all FM templates with
+ * Use {@link RoqFrontMatterLayoutTemplateBuildItem} to read all FM templates with
  * merged data.
  */
 public final class RoqFrontMatterRawTemplateBuildItem extends MultiBuildItem {
@@ -20,7 +21,7 @@ public final class RoqFrontMatterRawTemplateBuildItem extends MultiBuildItem {
     /**
      * The page details.
      */
-    private final PageInfo info;
+    private final TemplateSource templateSource;
 
     /**
      * The layout used for this template.
@@ -40,31 +41,35 @@ public final class RoqFrontMatterRawTemplateBuildItem extends MultiBuildItem {
     private final ConfiguredCollection collection;
 
     /**
-     * The generated template content to be passed to be passed to Qute.
+     * The generated Qute template with the layout include
      */
     private final String generatedTemplate;
 
     /**
-     * Should this template be published (published templates can be available in the data, but hidden from routing).
+     * The generated Qute template with just the content (without the layout include)
      */
-    private final boolean published;
+    private final String generatedContentTemplate;
 
     /**
      * Static files attached to this template
      */
     private final List<Attachment> attachments;
 
-    public RoqFrontMatterRawTemplateBuildItem(PageInfo info, String layout, TemplateType type, JsonObject data,
+    public RoqFrontMatterRawTemplateBuildItem(TemplateSource templateSource,
+            String layout,
+            TemplateType type,
+            JsonObject data,
             ConfiguredCollection collection,
             String generatedTemplate,
-            boolean published, List<Attachment> attachments) {
-        this.info = info;
+            String generatedContentTemplate,
+            List<Attachment> attachments) {
+        this.templateSource = templateSource;
         this.layout = layout;
         this.type = type;
         this.data = data;
         this.collection = collection;
         this.generatedTemplate = generatedTemplate;
-        this.published = published;
+        this.generatedContentTemplate = generatedContentTemplate;
         this.attachments = attachments;
     }
 
@@ -81,11 +86,11 @@ public final class RoqFrontMatterRawTemplateBuildItem extends MultiBuildItem {
     }
 
     public String id() {
-        return info.id();
+        return templateSource.id();
     }
 
-    public PageInfo info() {
-        return info;
+    public TemplateSource templateSource() {
+        return templateSource;
     }
 
     public String layout() {
@@ -108,8 +113,8 @@ public final class RoqFrontMatterRawTemplateBuildItem extends MultiBuildItem {
         return generatedTemplate;
     }
 
-    public boolean published() {
-        return published;
+    public String generatedContentTemplate() {
+        return generatedContentTemplate;
     }
 
     public List<Attachment> attachments() {

@@ -1,29 +1,42 @@
 package io.quarkiverse.roq.data.deployment;
 
+import static io.quarkiverse.roq.util.PathUtils.removeExtension;
+import static io.quarkiverse.roq.util.PathUtils.toUnixPath;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.jboss.jandex.*;
+import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.ClassType;
+import org.jboss.jandex.DotName;
+import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
 
 import io.quarkiverse.roq.data.deployment.converters.DataConverterFinder;
-import io.quarkiverse.roq.data.deployment.exception.DataConflictException;
-import io.quarkiverse.roq.data.deployment.exception.DataConversionException;
-import io.quarkiverse.roq.data.deployment.exception.DataMappingMismatchException;
-import io.quarkiverse.roq.data.deployment.exception.DataScanningException;
+import io.quarkiverse.roq.data.deployment.exception.*;
 import io.quarkiverse.roq.data.deployment.items.DataMappingBuildItem;
 import io.quarkiverse.roq.data.deployment.items.RoqDataBuildItem;
 import io.quarkiverse.roq.data.deployment.items.RoqDataJsonBuildItem;
 import io.quarkiverse.roq.data.runtime.annotations.DataMapping;
 import io.quarkiverse.roq.deployment.items.RoqJacksonBuildItem;
 import io.quarkiverse.roq.deployment.items.RoqProjectBuildItem;
+import io.quarkiverse.web.bundler.spi.items.WebBundlerWatchedDirBuildItem;
+import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
@@ -78,6 +91,17 @@ public class RoqDataReaderProcessor {
 
         Map<String, AnnotationInstance> annotationMap = annotations.stream().collect(Collectors.toMap(
                 annotation -> annotation.value().asString(), Function.identity()));
+
+        annotationMap.forEach((key, annotationInstance) -> {
+            boolean isRequired = Optional.ofNullable(annotationInstance.value("required"))
+                    .map(AnnotationValue::asBoolean)
+                    .orElse(false);
+
+            if (isRequired && !dataJsonMap.containsKey(key)) {
+                throw new DataMappingRequiredFileException(
+                        "The @DataMapping#value(%s) is required, but there is no corresponding data file".formatted(key));
+            }
+        });
 
         if (config.enforceBean()) {
             List<String> dataMappingErrors = collectDataMappingErrors(annotationMap.keySet(), dataJsonMap.keySet());
@@ -169,6 +193,12 @@ public class RoqDataReaderProcessor {
         return messages;
     }
 
+    @BuildStep(onlyIf = IsDevelopment.class)
+    void watch(RoqDataConfig config, RoqProjectBuildItem roqProject,
+            BuildProducer<WebBundlerWatchedDirBuildItem> webBundlerWatch) {
+        webBundlerWatch.produce(new WebBundlerWatchedDirBuildItem(roqProject.project().roqDir().resolve(config.dir())));
+    }
+
     public Collection<RoqDataBuildItem> scanDataFiles(RoqProjectBuildItem roqProject,
             DataConverterFinder converter,
             BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFilesProducer,
@@ -199,7 +229,7 @@ public class RoqDataReaderProcessor {
             Path rootDir,
             Map<String, RoqDataBuildItem> items) {
         return file -> {
-            var name = rootDir.relativize(file).toString().replaceAll("\\..*", "").replaceAll("/", "_");
+            var name = toUnixPath(removeExtension(rootDir.relativize(file).toString()));
             if (items.containsKey(name)) {
                 throw new DataConflictException("Multiple data files found for the name: '%s'.".formatted(name));
             }
@@ -214,8 +244,8 @@ public class RoqDataReaderProcessor {
                 try {
                     items.put(name, new RoqDataBuildItem(name, file, Files.readAllBytes(file), dataConverter));
                 } catch (IOException e) {
-                    throw new UncheckedIOException("Error while decoding using %s converter: %s "
-                            .formatted(filename, converter.getClass()), e);
+                    throw new UncheckedIOException("Error while reading data file: '%s'"
+                            .formatted(filename), e);
                 }
             }
         };

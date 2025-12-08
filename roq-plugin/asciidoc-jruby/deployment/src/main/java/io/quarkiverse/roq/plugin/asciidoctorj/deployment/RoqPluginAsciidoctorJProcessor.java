@@ -1,8 +1,5 @@
 package io.quarkiverse.roq.plugin.asciidoctorj.deployment;
 
-import java.util.Set;
-
-import io.quarkiverse.roq.frontmatter.deployment.scan.RoqFrontMatterQuteMarkupBuildItem;
 import io.quarkiverse.roq.plugin.asciidoctorj.runtime.AsciidoctorJConverter;
 import io.quarkiverse.roq.plugin.asciidoctorj.runtime.AsciidoctorJSectionHelperFactory;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -17,12 +14,6 @@ public class RoqPluginAsciidoctorJProcessor {
     @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(FEATURE);
-    }
-
-    @BuildStep
-    RoqFrontMatterQuteMarkupBuildItem markup() {
-        return new RoqFrontMatterQuteMarkupBuildItem(Set.of("adoc", "asciidoc"),
-                new RoqFrontMatterQuteMarkupBuildItem.QuteMarkupSection("{#asciidoc}", "{/asciidoc}"));
     }
 
     @BuildStep

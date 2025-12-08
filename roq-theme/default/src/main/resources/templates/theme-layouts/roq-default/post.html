@@ -1,14 +1,16 @@
 ---
 layout: roq-default/main
+asciidoc-attributes:
+  notitle: true
 ---
 
 {@io.quarkiverse.roq.frontmatter.runtime.model.DocumentPage page}
 
 {#insert before-article /}
 
-<article class="article-page">
+<article class="article-page" xmlns="http://www.w3.org/1999/html">
   {#insert article-start /}
-  <div class="page-content">
+  <section class="page-content">
     {#if page.image}
     <div class="page-cover-image">
       <figure>
@@ -19,12 +21,14 @@ layout: roq-default/main
       </figure>
     </div> <!-- End Page Cover Image -->
     {/if}
-    <div class="wrap-content">
+    <section class="wrap-content">
       <header class="header-page">
         <h1 class="page-title">{page.title}</h1>
         <div class="page-date"><span>{page.date.format('yyyy, MMM dd')}&nbsp;&nbsp;&nbsp;&nbsp;</span></div>
       </header>
-      {#insert /}
+      <section>
+        {#insert /}
+      </section>
       <div class="page-footer">
         <div class="footer-links">
           <div class="page-share">
@@ -32,8 +36,8 @@ layout: roq-default/main
                title="Share on Twitter" rel="nofollow" target="_blank">Twitter</a>
             <a href="https://facebook.com/sharer.php?u={page.url.encoded}" title="Share on Facebook"
                rel="nofollow" target="_blank">Facebook</a>
-            <a href="https://plus.google.com/share?url={page.url.encoded}" title="Share on Google+"
-               rel="nofollow" target="_blank">Google+</a>
+            <a href="https://bsky.app/intent/compose?text={page.title}%0ACheck%20it%20out%20{page.url.encoded}" title="Share on Bluesky"
+                           rel="nofollow" target="_blank">Bluesky</a>
           </div>
           <div class="page-tag">
             {#for tag in page.data.tags.asStrings}
@@ -58,8 +62,8 @@ layout: roq-default/main
         {/let}
         {/if}
       </div>
-    </div> <!-- End Wrap Content -->
-  </div> <!-- End Page Content -->
+    </section> <!-- End Wrap Content -->
+  </section> <!-- End Page Content -->
   {#insert article-end /}
 </article> <!-- End Article Page -->
 

@@ -1,5 +1,6 @@
 package io.quarkiverse.roq.frontmatter.runtime.config;
 
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,18 +22,10 @@ public interface RoqSiteConfig {
     String CONTENT_DIR = "content";
     String STATIC_DIR = "static";
     String PUBLIC_DIR = "public";
-    String IGNORED_FILES = "**/_**,_**,.**";
+    String IGNORED_FILES = "**.DS_Store,**Thumbs.db,**/_**,_**";
+
     List<ConfiguredCollection> DEFAULT_COLLECTIONS = List
             .of(new ConfiguredCollection("posts", false, false, false, ":theme/post"));
-
-    /**
-     * The root path of your site (e.g. /blog) relative the quarkus http root path.
-     * This is to be used only when the site is living next to a Quarkus application.
-     * Use `quarkus.http.root-path` for GitHub Pages relative url.
-     */
-    @WithName("root-path")
-    @WithDefault("/")
-    String rootPath();
 
     /**
      * the base hostname & protocol for your site, e.g. http://example.com
@@ -51,10 +44,48 @@ public interface RoqSiteConfig {
     int routeOrder();
 
     /**
-     * The ignored files in the site directory (you can use glob expressions).
+     * Add new ignored files to the default list.
+     *
+     * The ignored files (relative to the site directory).
+     *
+     * <p>
+     * Only the <code>content/</code>, <code>public/</code>, and <code>static/</code> directories are scanned.
+     * </p>
+     */
+    Optional<List<String>> ignoredFiles();
+
+    /**
+     * The default ignored files (relative to the site directory) include:
+     * <ul>
+     * <li><code>.DS_Store</code></li>
+     * <li><code>Thumbs.db</code></li>
+     * <li>All files or directories starting with an underscore (<code>_</code>)</li>
+     * </ul>
+     *
+     * <p>
+     * Only the <code>content/</code>, <code>public/</code>, and <code>static/</code> directories are scanned.
+     * </p>
      */
     @WithDefault(IGNORED_FILES)
-    List<String> ignoredFiles();
+    List<String> defaultIgnoredFiles();
+
+    /**
+     * Pages whose content should be escaped&mdash;
+     * i.e., included in Qute rendering but not parsed for Qute expressions.
+     *
+     * <p>
+     * This is based on the page's relative path from the content directory.
+     * </p>
+     *
+     * <p>
+     * This applies only to <em>pages</em> (not layouts or partials).
+     * </p>
+     *
+     * <p>
+     * Supports glob expressions.
+     * </p>
+     */
+    Optional<List<String>> escapedPages();
 
     /**
      * The layout to use for normal html pages if not specified in FM.
@@ -118,6 +149,12 @@ public interface RoqSiteConfig {
     boolean draft();
 
     /**
+     * Directory under which all documents will be considered as drafts.
+     */
+    @WithDefault("drafts")
+    String draftDirectory();
+
+    /**
      * Format for dates
      */
     @WithDefault("yyyy-MM-dd[ HH:mm][:ss][ Z]")
@@ -128,6 +165,17 @@ public interface RoqSiteConfig {
      */
     @ConfigDocDefault("document timezone if provided or system timezone")
     Optional<String> timeZone();
+
+    default ZoneId timeZoneOrDefault() {
+        return timeZone().isPresent() ? ZoneId.of(timeZone().get()) : ZoneId.systemDefault();
+    }
+
+    /**
+     * The default language to use when no language is specified in the frontmatter.
+     * This language will be used as a fallback for articles that don't have a 'locale' property.
+     */
+    @WithDefault("en")
+    String defaultLocale();
 
     /**
      * Indicates whether file names in the public directory and files attached to pages should be slugified
@@ -144,9 +192,16 @@ public interface RoqSiteConfig {
      * The directory names (in the Roq site directory) containing collections as key
      * and the corresponding collection config as value
      */
-    @ConfigDocDefault("posts={id: post, hidden: false}")
+    @ConfigDocDefault("posts=true")
     @WithName("collections")
     Map<String, CollectionConfig> collectionsMap();
+
+    /**
+     * The directory where the generated templates should be created inside the output directory.
+     */
+    @WithDefault("roq-templates")
+    @Pattern(regexp = DIR_NAME_PATTERN)
+    String generatedTemplatesOutputDir();
 
     default List<ConfiguredCollection> collections() {
         if (collectionsMap().isEmpty()) {
@@ -156,6 +211,19 @@ public interface RoqSiteConfig {
                 .map(e -> new ConfiguredCollection(e.getKey(), false, e.getValue().hidden(), e.getValue().future(),
                         e.getValue().layout().orElse(null)))
                 .toList();
+    }
+
+    /**
+     * <strong>READ CAREFULLY:</strong><br>
+     * The root path of your site (e.g. <code>/blog</code>) should be set using
+     * <code>quarkus.http.root-path</code>.<br>
+     * This path prefix should be relative to the Quarkus HTTP root path and is meant to be used
+     * only when the Roq site is served alongside a Quarkus application on a separate path.
+     */
+    Optional<String> pathPrefix();
+
+    default String pathPrefixOrEmpty() {
+        return pathPrefix().orElse("");
     }
 
     interface CollectionConfig {

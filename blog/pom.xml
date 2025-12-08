@@ -6,16 +6,16 @@
     <version>999-SNAPSHOT</version>
     <name>Quarkus Roq - Blog</name>
     <properties>
-        <compiler-plugin.version>3.14.0</compiler-plugin.version>
+        <compiler-plugin.version>3.14.1</compiler-plugin.version>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
-        <quarkus.platform.version>3.19.0</quarkus.platform.version>
+        <quarkus.platform.version>3.29.4</quarkus.platform.version>
         <quarkus-roq.version>999-SNAPSHOT</quarkus-roq.version>
         <skipITs>true</skipITs>
-        <surefire-plugin.version>3.5.2</surefire-plugin.version>
+        <surefire-plugin.version>3.5.4</surefire-plugin.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -51,6 +51,11 @@
         </dependency>
         <dependency>
             <groupId>io.quarkiverse.roq</groupId>
+            <artifactId>quarkus-roq-plugin-lunr</artifactId>
+            <version>${quarkus-roq.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkiverse.roq</groupId>
             <artifactId>quarkus-roq-plugin-aliases</artifactId>
             <version>${quarkus-roq.version}</version>
         </dependency>
@@ -74,16 +79,12 @@
             <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.quarkiverse.web-bundler</groupId>
-            <artifactId>quarkus-web-bundler</artifactId>
-            <version>1.8.1</version>
-        </dependency>
-        <dependency>
             <groupId>org.mvnpm</groupId>
             <artifactId>highlight.js</artifactId>
             <version>11.11.1</version>
             <scope>provided</scope>
         </dependency>
+
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-arc</artifactId>
@@ -111,9 +112,10 @@
             <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-config-doc-maven-plugin</artifactId>
+                <version>${quarkus.platform.version}</version>
                 <extensions>true</extensions>
                 <configuration>
-                    <targetDirectory>${project.basedir}/templates/partials/doc/configs</targetDirectory>
+                    <targetDirectory>${project.basedir}/includes/configs</targetDirectory>
                 </configuration>
             </plugin>
             <plugin>
@@ -192,8 +194,7 @@
                 </executions>
                 <configuration>
                     <systemPropertyVariables>
-                        <native.image.path>${project.build.directory}/${project.build.finalName}-runner
-                        </native.image.path>
+                        <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                         <maven.home>${maven.home}</maven.home>
                     </systemPropertyVariables>
@@ -210,7 +211,7 @@
                 </property>
             </activation>
             <properties>
-                <quarkus-roq.version>1.3.3</quarkus-roq.version>
+                <quarkus-roq.version>1.10.3</quarkus-roq.version>
             </properties>
         </profile>
     </profiles>

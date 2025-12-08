@@ -1,6 +1,5 @@
 package io.quarkiverse.roq.frontmatter.runtime.model;
 
-import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -80,28 +79,8 @@ public class RoqCollection extends ArrayList<DocumentPage> {
                 Math.min(this.size(), (zeroBasedCurrent * paginator.limit()) + paginator.limit()));
     }
 
-    public List<DocumentPage> randomise() {
-        final ArrayList<DocumentPage> list = new ArrayList<>(this);
-        Collections.shuffle(list);
-        return list;
-    }
-
-    /**
-     * @return future documents
-     */
-    public List<DocumentPage> future() {
-        return stream().filter(d -> d.date().isAfter(ZonedDateTime.now())).toList();
-    }
-
     public String layout() {
         return collection.layout();
-    }
-
-    /**
-     * @return past documents
-     */
-    public List<DocumentPage> past() {
-        return stream().filter(d -> d.date().isBefore(ZonedDateTime.now())).toList();
     }
 
     /**
@@ -147,4 +126,18 @@ public class RoqCollection extends ArrayList<DocumentPage> {
         return resultMap;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass())
+            return false;
+        if (!super.equals(o))
+            return false;
+        RoqCollection that = (RoqCollection) o;
+        return Objects.equals(collection, that.collection);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), collection);
+    }
 }

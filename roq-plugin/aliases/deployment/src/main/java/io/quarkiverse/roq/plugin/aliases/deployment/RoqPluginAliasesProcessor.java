@@ -10,7 +10,8 @@ import java.util.Map;
 import java.util.Set;
 
 import io.quarkiverse.roq.frontmatter.deployment.TemplateLink;
-import io.quarkiverse.roq.frontmatter.deployment.data.RoqFrontMatterTemplateBuildItem;
+import io.quarkiverse.roq.frontmatter.deployment.data.RoqFrontMatterPageTemplateBuildItem;
+import io.quarkiverse.roq.frontmatter.runtime.RoqTemplateExtension;
 import io.quarkiverse.roq.frontmatter.runtime.config.RoqSiteConfig;
 import io.quarkiverse.roq.frontmatter.runtime.model.RoqUrl;
 import io.quarkiverse.roq.generator.deployment.items.SelectedPathBuildItem;
@@ -23,7 +24,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
 public class RoqPluginAliasesProcessor {
@@ -39,7 +39,7 @@ public class RoqPluginAliasesProcessor {
     @BuildStep
     public void consumeTemplates(
             RoqSiteConfig config,
-            List<RoqFrontMatterTemplateBuildItem> templates,
+            List<RoqFrontMatterPageTemplateBuildItem> templates,
             BuildProducer<RoqFrontMatterAliasesBuildItem> aliasesProducer,
             BuildProducer<SelectedPathBuildItem> selectedPathsProducer,
             BuildProducer<NotFoundPageDisplayableEndpointBuildItem> notFoundPageDisplayableEndpointProducer) {
@@ -49,11 +49,7 @@ public class RoqPluginAliasesProcessor {
         }
 
         HashMap<String, String> aliasMap = new HashMap<>();
-        for (RoqFrontMatterTemplateBuildItem item : templates) {
-
-            if (!item.published()) {
-                continue;
-            }
+        for (RoqFrontMatterPageTemplateBuildItem item : templates) {
 
             Set<String> aliasesName = getAliases(item.data());
             if (aliasesName.isEmpty()) {
@@ -61,8 +57,8 @@ public class RoqPluginAliasesProcessor {
             }
             RoqUrl url = item.url();
             for (String alias : aliasesName) {
-                String aliasLink = TemplateLink.pageLink(config.rootPath(), alias, new TemplateLink.PageLinkData(
-                        item.raw().info(), item.raw().collectionId(), item.data()));
+                String aliasLink = TemplateLink.pageLink(config.pathPrefixOrEmpty(), alias, new TemplateLink.PageLinkData(
+                        item.source(), item.raw().collectionId(), item.data()));
                 aliasMap.put(aliasLink, url.absolute());
             }
         }
@@ -94,12 +90,9 @@ public class RoqPluginAliasesProcessor {
     private Set<String> getAliases(JsonObject json) {
         HashSet<String> aliases = new HashSet<>();
         for (String aliasesKey : ALIASES_FOR_REDIRECTING) {
-            JsonArray jsonArray = json.getJsonArray(aliasesKey);
-            if (jsonArray == null) {
-                continue;
-            }
-            for (int i = 0; i < jsonArray.size(); i++) {
-                String alias = jsonArray.getString(i);
+            final List<String> array = RoqTemplateExtension.asStrings(json.getValue(aliasesKey));
+            for (int i = 0; i < array.size(); i++) {
+                String alias = array.get(i);
                 if (!alias.isBlank()) {
                     aliases.add(alias);
                 }

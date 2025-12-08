@@ -8,6 +8,13 @@ import java.util.List;
 import io.quarkiverse.roq.util.PathUtils;
 
 public record PageFiles(List<String> names, boolean slugified) {
+
+    public static final PageFiles EMPTY = new PageFiles(List.of(), false);
+
+    public static PageFiles empty() {
+        return EMPTY;
+    }
+
     public boolean contains(Object o) {
         return names.contains(o);
     }
@@ -25,6 +32,7 @@ public record PageFiles(List<String> names, boolean slugified) {
         String path = removeExtension(filePath);
         // We allow dots because some static files might have versions in their names
         // Anyway they have an extension
-        return PathUtils.slugify(path, true, true) + "." + extension;
+        String slugify = PathUtils.slugify(path, true, true);
+        return extension == null ? slugify : slugify + "." + extension;
     }
 }

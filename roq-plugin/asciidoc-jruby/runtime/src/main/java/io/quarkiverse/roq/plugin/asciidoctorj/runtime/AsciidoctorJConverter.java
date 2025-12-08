@@ -1,63 +1,91 @@
 package io.quarkiverse.roq.plugin.asciidoctorj.runtime;
 
-import java.nio.file.Files;
+import static org.asciidoctor.Options.BASEDIR;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 import org.asciidoctor.*;
+import org.asciidoctor.ast.Document;
 import org.jboss.logging.Logger;
+
+import io.quarkiverse.roq.frontmatter.runtime.RoqTemplateAttributes;
 
 @Singleton
 public class AsciidoctorJConverter {
 
     private static final Logger LOG = Logger.getLogger(AsciidoctorJConverter.class);
+    public static final String ROOTDIR = "root_dir";
 
     private final Asciidoctor asciidoctor;
-
-    private final AsciidoctorJConfig config;
-    private final Options options;
+    private Map<String, String> configuredAttributes;
 
     @Inject
     public AsciidoctorJConverter(AsciidoctorJConfig config) {
+        this(config.attributes());
+    }
+
+    public AsciidoctorJConverter(Map<String, String> configuredAttributes) {
+        this.configuredAttributes = configuredAttributes;
         LOG.info("Starting Asciidoctorj...");
         final Instant start = Instant.now();
         this.asciidoctor = Asciidoctor.Factory.create();
-        this.config = config;
         asciidoctor.requireLibrary("asciidoctor-diagram");
+        asciidoctor.javaExtensionRegistry().includeProcessor(new AsciidocJInclude());
+        LOG.infof("Asciidoctorj started in %sms", Duration.between(start, Instant.now()).toMillis());
+
+    }
+
+    public Options createOptions(Map<String, String> asciidocAttributes, RoqTemplateAttributes templateAttributes) {
         final AttributesBuilder attributes = Attributes.builder()
                 .showTitle(true)
+                .attribute("sitegen", "roq")
+                .attribute("relfileprefix", "../")
+                .attribute("relfilesuffix", "/")
                 .attribute("noheader", true);
-        config.attributes().forEach(attributes::attribute);
-        final Path templateDir = Paths.get(config.templatesDir());
+        if (templateAttributes.pageUrl() != null) {
+            attributes.attribute("page-url", templateAttributes.pageUrl());
+        }
+        if (templateAttributes.pagePath() != null) {
+            attributes.attribute("page-path", templateAttributes.pagePath());
+        }
+        if (templateAttributes.siteUrl() != null) {
+            attributes.attribute("site-url", templateAttributes.siteUrl());
+        }
+        if (templateAttributes.sitePath() != null) {
+            attributes.attribute("site-path", templateAttributes.sitePath());
+        }
+        configuredAttributes.forEach(attributes::attribute);
+        asciidocAttributes.forEach(attributes::attribute);
+
         final OptionsBuilder optionsBuilder = Options.builder();
-        if (Files.isDirectory(templateDir)) {
-            optionsBuilder.templateDirs(templateDir.toAbsolutePath().toFile());
-            optionsBuilder.standalone(true);
-        } else {
-            optionsBuilder.standalone(false);
+        if (templateAttributes.sourcePath() != null) {
+            Path templateDir = Paths.get(templateAttributes.sourcePath()).getParent();
+            optionsBuilder.option(BASEDIR, templateDir.toAbsolutePath().toString());
+            optionsBuilder.option(ROOTDIR, templateAttributes.sourceRootPath());
         }
-        final Path workingDir = Paths.get("");
-        if (Files.isDirectory(workingDir)) {
-            optionsBuilder.baseDir(workingDir.toAbsolutePath().toFile());
-        }
-        options = optionsBuilder
+        return optionsBuilder
                 .safe(SafeMode.SAFE)
                 .backend("html5")
                 .attributes(attributes.build())
                 .build();
-        LOG.infof("Asciidoctorj started in %sms", Duration.between(start, Instant.now()).toMillis());
     }
 
-    public String apply(String asciidoc) {
+    public String apply(String asciidoc,
+            Map<String, String> asciidocAttributes,
+            RoqTemplateAttributes templateAttributes) {
+        Options options = createOptions(asciidocAttributes, templateAttributes);
         // Cleaning the content from global indentation is necessary because
         // AsciiDoc content is not supposed to be indented globally
         // In Qute context it might often be indented
-        return asciidoctor.convert(trimIndent(asciidoc), options);
+        final Document doc = asciidoctor.load(trimIndent(asciidoc), options);
+        return doc.convert();
     }
 
     public static String trimIndent(String content) {

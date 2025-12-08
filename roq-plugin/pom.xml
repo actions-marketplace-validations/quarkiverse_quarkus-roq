@@ -11,15 +11,21 @@
     <artifactId>quarkus-roq-plugin-parent</artifactId>
     <packaging>pom</packaging>
     <name>Quarkus Roq - Plugins</name>
-
+    <properties>
+        <jgit.version>7.4.0.202509020913-r</jgit.version>
+    </properties>
     <modules>
         <module>tagging</module>
         <module>aliases</module>
         <module>markdown</module>
+        <module>asciidoc-common</module>
         <module>asciidoc</module>
         <module>asciidoc-jruby</module>
         <module>qrcode</module>
         <module>series</module>
         <module>sitemap</module>
+        <module>lunr</module>
+        <module>diagram</module>
+        <module>faker</module>
     </modules>
 </project>

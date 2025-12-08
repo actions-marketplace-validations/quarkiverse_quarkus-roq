@@ -1,19 +1,24 @@
 package io.quarkiverse.roq.frontmatter.runtime;
 
-import static io.quarkiverse.roq.util.PathUtils.*;
+import static io.quarkiverse.roq.util.PathUtils.addTrailingSlashIfNoExt;
+import static io.quarkiverse.roq.util.PathUtils.removeLeadingSlash;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.event.Event;
 
 import org.jboss.logging.Logger;
 
+import io.quarkiverse.roq.frontmatter.runtime.config.RoqSiteConfig;
 import io.quarkiverse.roq.frontmatter.runtime.model.Page;
 import io.quarkiverse.roq.frontmatter.runtime.model.Site;
+import io.quarkiverse.roq.frontmatter.runtime.utils.Sites;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.InjectableContext.ContextState;
@@ -21,8 +26,8 @@ import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.impl.LazyValue;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
-import io.quarkus.qute.Variant;
 import io.quarkus.qute.runtime.TemplateProducer;
+import io.quarkus.runtime.LocalesBuildTimeConfig;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
@@ -31,15 +36,16 @@ import io.quarkus.vertx.http.runtime.VertxHttpBuildTimeConfig;
 import io.quarkus.vertx.http.runtime.security.QuarkusHttpUser;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpHeaders;
-import io.vertx.ext.web.MIMEHeader;
+import io.vertx.core.http.impl.MimeMapping;
 import io.vertx.ext.web.RoutingContext;
 
 public class RoqRouteHandler implements Handler<RoutingContext> {
 
     private static final Logger LOG = Logger.getLogger(RoqRouteHandler.class);
 
-    private final String rootPath;
     private final List<String> compressMediaTypes;
+    private final RoqSiteConfig config;
+    private final LocalesBuildTimeConfig locales;
     // request path to template path
     private final Map<String, Supplier<? extends Page>> pages;
     private final Map<String, Page> extractedPaths;
@@ -52,12 +58,15 @@ public class RoqRouteHandler implements Handler<RoutingContext> {
     private final LazyValue<Site> site;
 
     public RoqRouteHandler(String rootPath, VertxHttpBuildTimeConfig httpBuildTimeConfig,
-            Map<String, Supplier<? extends Page>> pages) {
-        this.rootPath = rootPath;
+            Map<String, Supplier<? extends Page>> pages,
+            RoqSiteConfig config,
+            LocalesBuildTimeConfig locales) {
         this.pages = pages;
         this.compressMediaTypes = httpBuildTimeConfig.enableCompression()
                 ? httpBuildTimeConfig.compressMediaTypes().orElse(List.of())
                 : null;
+        this.config = config;
+        this.locales = locales;
         this.extractedPaths = new ConcurrentHashMap<>();
         ArcContainer container = Arc.container();
         this.securityIdentityEvent = container.beanManager().getEvent().select(SecurityIdentity.class);
@@ -67,7 +76,7 @@ public class RoqRouteHandler implements Handler<RoutingContext> {
         // TemplateProducer is singleton and we want to initialize lazily
         this.templateProducer = new LazyValue<>(
                 () -> Arc.container().instance(TemplateProducer.class).get());
-        this.site = new LazyValue<>(() -> Arc.container().instance(Site.class).get());
+        this.site = new LazyValue<>(Sites::getSite);
     }
 
     @Override
@@ -115,48 +124,48 @@ public class RoqRouteHandler implements Handler<RoutingContext> {
         // Extract the real template path, e.g. /item.html -> web/item
         Page page = extractedPaths.computeIfAbsent(requestPath, this::extractTemplatePath);
         if (page != null) {
-            final String templateId = removeExtension(page.info().generatedTemplateId());
+            final String templateId = page.source().template().generatedQuteTemplateId();
             Template template = templateProducer.get().getInjectableTemplate(templateId);
-            TemplateInstance originalInstance = template.instance();
-            TemplateInstance instance = originalInstance;
-
-            List<MIMEHeader> acceptableTypes = rc.parsedHeaders().accept();
-            // Note that we need to obtain the variants from the original template, even if fragment is used
-            Variant selected = trySelectVariant(rc, originalInstance, acceptableTypes);
-
-            if (selected != null) {
-                instance.setAttribute(TemplateInstance.SELECTED_VARIANT, selected);
-                rc.response().putHeader(HttpHeaders.CONTENT_TYPE, selected.getContentType());
-
-                // Compression support - only compress the response if the content type matches the config value
-                if (compressMediaTypes != null
-                        && compressMediaTypes.contains(selected.getContentType())) {
-                    String contentEncoding = rc.response().headers().get(HttpHeaders.CONTENT_ENCODING);
-                    if (contentEncoding != null && HttpHeaders.IDENTITY.toString().equals(contentEncoding)) {
-                        rc.response().headers().remove(HttpHeaders.CONTENT_ENCODING);
-                    }
+            TemplateInstance instance = template.instance();
+            String contentType = template.getVariant().isPresent() ? template.getVariant().get().getContentType()
+                    : MimeMapping.getMimeTypeForFilename(templateId);
+            Charset charset = template.getVariant().isPresent() ? template.getVariant().get().getCharset()
+                    : StandardCharsets.UTF_8;
+            if (contentType != null) {
+                if (contentType.startsWith("text")) {
+                    rc.response().putHeader(HttpHeaders.CONTENT_TYPE,
+                            contentType + ";charset="
+                                    + charset);
+                } else {
+                    rc.response().putHeader(HttpHeaders.CONTENT_TYPE, contentType);
                 }
             }
 
-            if (selected == null && !acceptableTypes.isEmpty()) {
-                // The Accept header is set, but we are not able to select the appropriate variant
-                LOG.errorf("Appropriate template variant not found %s: %s",
-                        acceptableTypes.stream().map(MIMEHeader::rawValue).collect(Collectors.toList()),
-                        rc.request().path());
-                rc.response().setStatusCode(406).end();
-            } else {
-                instance.data("page", page);
-                instance.data("site", site.get());
-                instance.renderAsync().whenComplete((r, t) -> {
-                    if (t != null) {
-                        Throwable rootCause = rootCause(t);
-                        LOG.errorf("Error occurred while rendering the template [%s]: %s", page.id(), rootCause.toString());
-                        rc.fail(rootCause);
-                    } else {
-                        rc.response().setStatusCode(200).end(r);
-                    }
-                });
+            // Compression support - only compress the response if the content type matches the config value
+            if (contentType != null && compressMediaTypes != null
+                    && compressMediaTypes.contains(contentType)) {
+                String contentEncoding = rc.response().headers().get(HttpHeaders.CONTENT_ENCODING);
+                if (contentEncoding != null && HttpHeaders.IDENTITY.toString().equals(contentEncoding)) {
+                    rc.response().headers().remove(HttpHeaders.CONTENT_ENCODING);
+                }
             }
+
+            instance.data("page", page);
+            instance.data("site", site.get());
+            instance.setAttribute(RoqTemplateAttributes.SITE_URL, site.get().url().absolute());
+            instance.setAttribute(RoqTemplateAttributes.SITE_PATH, site.get().url().relative());
+            instance.setAttribute(RoqTemplateAttributes.PAGE_URL, page.url().absolute());
+            instance.setAttribute(RoqTemplateAttributes.PAGE_PATH, page.url().relative());
+            instance.setAttribute(TemplateInstance.LOCALE, getLocale(page, rc));
+            instance.renderAsync().whenComplete((r, t) -> {
+                if (t != null) {
+                    Throwable rootCause = rootCause(t);
+                    LOG.errorf("Error occurred while rendering the template [%s]: %s", page.id(), rootCause.toString());
+                    rc.fail(rootCause);
+                } else {
+                    rc.response().setStatusCode(200).end(r);
+                }
+            });
         } else {
             LOG.debugf("Template page not found: %s", rc.request().path());
             rc.next();
@@ -171,27 +180,6 @@ public class RoqRouteHandler implements Handler<RoutingContext> {
         return root;
     }
 
-    private Variant trySelectVariant(RoutingContext rc, TemplateInstance instance, List<MIMEHeader> acceptableTypes) {
-        Object variantsAttr = instance.getAttribute(TemplateInstance.VARIANTS);
-        if (variantsAttr != null) {
-            @SuppressWarnings("unchecked")
-            List<Variant> variants = (List<Variant>) variantsAttr;
-            if (!acceptableTypes.isEmpty()) {
-                for (MIMEHeader accept : acceptableTypes) {
-                    // https://github.com/vert-x3/vertx-web/issues/2388
-                    accept.value();
-                    for (Variant variant : variants) {
-                        if (new ContentType(variant.getContentType()).matches(accept.component(),
-                                accept.subComponent())) {
-                            return variant;
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
     private Page extractTemplatePath(String path) {
         path = removeLeadingSlash(path);
 
@@ -203,25 +191,18 @@ public class RoqRouteHandler implements Handler<RoutingContext> {
         return null;
     }
 
-    final static class ContentType {
-
-        private static final String WILDCARD = "*";
-
-        final String type;
-        final String subtype;
-
-        ContentType(String value) {
-            int slash = value.indexOf('/');
-            this.type = value.substring(0, slash);
-            int semicolon = value.indexOf(';');
-            this.subtype = semicolon != -1 ? value.substring(slash + 1, semicolon) : value.substring(slash + 1);
+    private String getLocale(Page page, RoutingContext rc) {
+        Object pageLocale = page.data("locale");
+        if (pageLocale != null) {
+            return pageLocale.toString();
         }
-
-        boolean matches(String otherType, String otherSubtype) {
-            return (type.equals(otherType) || type.equals(WILDCARD) || otherType.equals(WILDCARD))
-                    && (subtype.equals(otherSubtype) || subtype.equals(WILDCARD) || otherSubtype.equals(WILDCARD));
+        if (!rc.acceptableLanguages().isEmpty()) {
+            return rc.acceptableLanguages().get(0).tag();
         }
-
+        if (config.defaultLocale() != null) {
+            return config.defaultLocale();
+        }
+        return locales.defaultLocale().map(Locale::getDisplayLanguage).orElse(null);
     }
 
 }

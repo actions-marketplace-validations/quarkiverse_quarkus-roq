@@ -1,5 +1,5 @@
 name: Roq
-description: Static Site Generator with Quarkus super-powers.
+description: Hello, world! I’m Roq — a fun little SSG (Static Site Generator) with a Java soul and Quarkus energy.
 metadata:
   keywords:
     - website
@@ -12,12 +12,12 @@ metadata:
     - site
     - generator
     - web
-  guide: https://docs.quarkiverse.io/quarkus-roq/dev/
+  guide: https://iamroq.com/docs/
   icon-url: "https://raw.githubusercontent.com/quarkiverse/quarkus-roq/main/docs/modules/ROOT/assets/images/roq.svg"
   categories:
     - "web"
   config:
-    - "quarkus.roq"
+    - "site"
   status: "preview"
   codestart:
     name: "roq"

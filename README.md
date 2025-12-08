@@ -12,7 +12,7 @@
     <td valign="top" >
   
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-14-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-19-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 </td>
 <td valign="top">
@@ -24,10 +24,9 @@
 </div>
 </div>
 
+Roq is a static site generator that makes it easy to build websites and blogs(such as [Roq's blog](https://iamroq.com). It’s built with Java and Quarkus under the hood—but you don’t need to know them to get started.
 
-The Roq Static Site Generator allows to easily create a static website or blog (such as [Roq's blog](https://pages.quarkiverse.io/quarkus-roq/)) using Quarkus super-powers.
-
-Get started [here](https://pages.quarkiverse.io/quarkus-roq/docs/)!
+Get started [here](https://iamroq.com/docs/)!
 
 For those looking for the Roq Quarkus extensions (which can also be used standalone):
 - [Roq Data](https://docs.quarkiverse.io/quarkus-roq/dev/quarkus-roq-data.html): Use json/yaml files content from your templates and articles with type safety.
@@ -57,9 +56,16 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mkouba"><img src="https://avatars.githubusercontent.com/u/913004?v=4?s=100" width="100px;" alt="Martin Kouba"/><br /><sub><b>Martin Kouba</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=mkouba" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://foivos.zakkak.net"><img src="https://avatars.githubusercontent.com/u/1435395?v=4?s=100" width="100px;" alt="Foivos"/><br /><sub><b>Foivos</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=zakkak" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://medium.com/@jotak"><img src="https://avatars.githubusercontent.com/u/2153442?v=4?s=100" width="100px;" alt="Joel Takvorian"/><br /><sub><b>Joel Takvorian</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=jotak" title="Tests">⚠️</a> <a href="https://github.com/quarkiverse/quarkus-roq/commits?author=jotak" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/pablomxnl"><img src="https://avatars.githubusercontent.com/u/1665721?v=4?s=100" width="100px;" alt="Pablo Gutierrez"/><br /><sub><b>Pablo Gutierrez</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=pablomxnl" title="Code">💻</a> <a href="https://github.com/quarkiverse/quarkus-roq/commits?author=pablomxnl" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/pablomxnl"><img src="https://avatars.githubusercontent.com/u/1665721?v=4?s=100" width="100px;" alt="Pablo Gutierrez"/><br /><sub><b>Pablo Gutierrez</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=pablomxnl" title="Code">💻</a> <a href="https://github.com/quarkiverse/quarkus-roq/commits?author=pablomxnl" title="Documentation">📖</a> <a href="#ideas-pablomxnl" title="Ideas, Planning, & Feedback">🤔</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://pedrohosilva.wordpress.com"><img src="https://avatars.githubusercontent.com/u/8390247?v=4?s=100" width="100px;" alt="Pedro Hos"/><br /><sub><b>Pedro Hos</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=pedro-hos" title="Code">💻</a> <a href="https://github.com/quarkiverse/quarkus-roq/commits?author=pedro-hos" title="Documentation">📖</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/okcjug"><img src="https://avatars.githubusercontent.com/u/44554?v=4?s=100" width="100px;" alt="OKC JUG"/><br /><sub><b>OKC JUG</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/issues?q=author%3Aokcjug" title="Bug reports">🐛</a></td>
+    </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://jasondl.ee"><img src="https://avatars.githubusercontent.com/u/191616?v=4?s=100" width="100px;" alt="Jason Lee"/><br /><sub><b>Jason Lee</b></sub></a><br /><a href="#ideas-jasondlee" title="Ideas, Planning, & Feedback">🤔</a> <a href="https://github.com/quarkiverse/quarkus-roq/commits?author=jasondlee" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jotaNas"><img src="https://avatars.githubusercontent.com/u/69321552?v=4?s=100" width="100px;" alt="João Nascimento"/><br /><sub><b>João Nascimento</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=jotaNas" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/janwesterkamp"><img src="https://avatars.githubusercontent.com/u/6690182?v=4?s=100" width="100px;" alt="janwesterkamp"/><br /><sub><b>janwesterkamp</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=janwesterkamp" title="Code">💻</a> <a href="https://github.com/quarkiverse/quarkus-roq/commits?author=janwesterkamp" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/CodeSimcoe"><img src="https://avatars.githubusercontent.com/u/110094118?v=4?s=100" width="100px;" alt="Clément de Tastes"/><br /><sub><b>Clément de Tastes</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=CodeSimcoe" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://philippart-s.github.io/blog"><img src="https://avatars.githubusercontent.com/u/26224751?v=4?s=100" width="100px;" alt="Stéphane Philippart"/><br /><sub><b>Stéphane Philippart</b></sub></a><br /><a href="https://github.com/quarkiverse/quarkus-roq/commits?author=philippart-s" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
