@@ -66,3 +66,5 @@ release.properties
 .quarkus
 
 node_modules/
+build.js
+
