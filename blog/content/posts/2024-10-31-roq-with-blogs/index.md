@@ -1,29 +1,29 @@
 ---
 title: "Roq with Blogs"
 description:  🚀 Roq 1.0 is ON! It is time to give it a shot and give us feedback 🚀
-image: https://images.unsplash.com/photo-1458501534264-7d326fa0ca04?q=80&w=3540&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D
+image: https://images.unsplash.com/photo-1458501534264-7d326fa0ca04?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D
 tags: blogging
 author: ia3andy
 ---
 
 Hello folks,
 
-First let me thanks the Roq [contributors]({site.url('about')}), they have been awesome and this has been so fun to create Roq!
+First let me thanks the Roq [contributors]({=site.url('about')}), they have been awesome and this has been so fun to create Roq!
 
 **If you want to get started quickly:**
 
 [Click here](https://docs.quarkiverse.io/quarkus-roq/dev/index.html#:~:text=Click%20here%20to,roq%0Aquarkus%20dev) to generate your Roq Starter App.
 
-or use the [Quarkus CLI](https://docs.quarkiverse.io/quarkus-roq/dev/index.html#:~:text=or%20use%20the-,Quarkus%20CLI,-%3A):
+or use the [Roq CLI](https://docs.quarkiverse.io/quarkus-roq/dev/index.html):
 ```shell
-quarkus create app blog-with-roq -x=io.quarkiverse.roq:quarkus-roq
+roq create
 ```
 
 Then
 
 ```shell
 cd blog-with-roq
-quarkus dev
+roq
 ```
 
 **If you have a bit of time, with this release, I think it's time for me to give you the full story 📖:**
@@ -57,7 +57,7 @@ At this point, I thought back on what my wife had said... maybe it was time to r
 
 🗓️ **May 7, 2024:**
 
-![Discussion with Max]({page.image('generator-runtime-discussion.png')})
+![Discussion with Max]({=page.image('generator-runtime-discussion.webp')})
 
 My idea was to generate static pages at runtime… because then all of Quarkus could become static without any changes 😍.
 

@@ -1,0 +1,22 @@
+---
+theme-layout: main
+---
+
+{#head}<!-- Link to llms.txt so AI tools can discover it when fetching any page --><link rel="help" type="text/plain" href="/llms.txt"><script defer src="https://cloud.umami.is/script.js" data-website-id="ec20e318-9e17-4f7b-acc4-ea1e55802ee9"></script>{/head}
+
+{#search-overlay /}
+{#insert /}
+
+{#menu}
+
+{#search-button-input /}
+{#include partials/roq-default/sidebar-menu menu=cdi:menu.nav /}
+{#include partials/roq-default/sidebar-menu menu=cdi:menu.doc menuTitle="Doc" /}
+{/}
+
+{#footer}
+<footer>
+  {#roq/githubSource url="https://github.com/quarkiverse/quarkus-roq" /}
+  {#include partials/roq-default/sidebar-copyright /}
+</footer>
+{/}

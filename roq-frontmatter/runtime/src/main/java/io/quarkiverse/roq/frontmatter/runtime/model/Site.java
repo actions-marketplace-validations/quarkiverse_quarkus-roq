@@ -1,11 +1,13 @@
 package io.quarkiverse.roq.frontmatter.runtime.model;
 
+import static io.quarkiverse.roq.frontmatter.runtime.RoqFrontMatterKeys.DESCRIPTION;
+import static io.quarkiverse.roq.frontmatter.runtime.RoqFrontMatterKeys.TITLE;
 import static io.quarkiverse.roq.frontmatter.runtime.utils.Pages.getImgFromData;
 import static io.quarkiverse.roq.frontmatter.runtime.utils.Pages.normaliseName;
 import static io.quarkiverse.roq.frontmatter.runtime.utils.Pages.resolvePublicFile;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,8 +20,9 @@ import jakarta.enterprise.inject.Vetoed;
 
 import org.jboss.logging.Logger;
 
+import io.quarkiverse.roq.exception.RoqException;
 import io.quarkiverse.roq.frontmatter.runtime.exception.RoqStaticFileException;
-import io.quarkiverse.roq.util.PathUtils;
+import io.quarkiverse.tools.stringpaths.StringPaths;
 import io.quarkus.arc.impl.LazyValue;
 import io.quarkus.qute.TemplateData;
 import io.vertx.core.json.JsonObject;
@@ -42,7 +45,7 @@ public final class Site {
     private final LazyValue<Map<String, DocumentPage>> documentsById;
     private final NormalPage page;
     private final Map<Page, String> pageContentCache = new ConcurrentHashMap<>();
-    private final List<Page> allPages;
+    private final Collection<Page> allPages;
 
     /**
      * @param url the Roq site url to the index page
@@ -68,7 +71,7 @@ public final class Site {
     /**
      * @return The full list of pages for this site
      */
-    public List<Page> allPages() {
+    public Collection<Page> allPages() {
         return allPages;
     }
 
@@ -86,14 +89,14 @@ public final class Site {
      * The site title
      */
     public String title() {
-        return data().getString("title");
+        return data().getString(TITLE);
     }
 
     /**
      * The site description
      */
     public String description() {
-        return data().getString("description");
+        return data().getString(DESCRIPTION);
     }
 
     /**
@@ -129,10 +132,29 @@ public final class Site {
         }
         path = normaliseName(path, page.source().files().slugified());
         // Legacy images dir support
-        if (fileExists(PathUtils.join("static/assets/images", path))) {
-            return file(PathUtils.join("static/assets/images", path));
+        if (fileExists(StringPaths.join("static/assets/images", path))) {
+            return file(StringPaths.join("static/assets/images", path));
         }
-        return file(PathUtils.join(imagesDir, path));
+        String resolvedPath = StringPaths.join(imagesDir, path);
+        if (page.source().fileExists(resolvedPath)) {
+            return page.url().resolve(resolvedPath);
+        }
+        List<String> imageFiles = page.source().files().names().stream()
+                .filter(f -> f.startsWith(imagesDir))
+                .map(f -> f.substring(imagesDir.length()))
+                .toList();
+        RoqException.Builder error = RoqException.builder("Image not found")
+                .detail("'%s' not found in the '%s' directory (resolved to '%s').".formatted(name, imagesDir, resolvedPath));
+        if (page.source().template() != null) {
+            error.sourceInfo(page.source().template().file().toSourceInfo());
+        }
+        if (imageFiles.isEmpty()) {
+            error.hint("The '%s' directory is empty. Add the image to your public/%s directory.".formatted(imagesDir,
+                    imagesDir));
+        } else {
+            error.hint("Available images: %s".formatted(String.join(", ", imageFiles)));
+        }
+        throw new RoqStaticFileException(error);
     }
 
     /**
@@ -145,10 +167,10 @@ public final class Site {
         String path = String.valueOf(name);
         path = normaliseName(path, page.source().files().slugified());
         // Legacy images dir support
-        if (fileExists(PathUtils.join("static/assets/images", path))) {
+        if (fileExists(StringPaths.join("static/assets/images", path))) {
             return true;
         }
-        return fileExists(PathUtils.join(imagesDir, path));
+        return fileExists(StringPaths.join(imagesDir, path));
     }
 
     /**
@@ -284,12 +306,12 @@ public final class Site {
         Site site = (Site) o;
         return Objects.equals(url, site.url) && Objects.equals(imagesDir, site.imagesDir) && Objects.equals(data, site.data)
                 && Objects.equals(page, site.page)
-                && Objects.equals(pageContentCache, site.pageContentCache) && Objects.equals(allPages, site.allPages);
+                && Objects.equals(allPages, site.allPages);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(url, imagesDir, data, page, pageContentCache, allPages);
+        return Objects.hash(url, imagesDir, data, page, allPages);
     }
 
     @Override
@@ -304,12 +326,15 @@ public final class Site {
                 .toString();
     }
 
-    private static ArrayList<Page> getAllPages(List<NormalPage> pages, RoqCollections collections) {
-        final ArrayList<Page> allPages = new ArrayList<>(pages);
+    private static List<Page> getAllPages(List<NormalPage> pages, RoqCollections collections) {
+        final Map<String, Page> allPages = pages.stream().collect(Collectors.toMap(Page::id, page -> page, (a, b) -> b));
         for (RoqCollection value : collections.collections().values()) {
-            allPages.addAll(value);
+            for (Page page : value) {
+                allPages.put(page.id(), page);
+            }
         }
-        return allPages;
+        List<Page> list = allPages.values().stream().sorted(Comparator.comparing(Page::id)).toList();
+        return list;
     }
 
 }

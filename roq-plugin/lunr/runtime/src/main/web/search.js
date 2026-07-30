@@ -1,17 +1,19 @@
 import lunr from 'lunr';
-import './search.scss';
+import './search.css';
 import debounce from 'lodash/debounce';
 
 const setupSearch = function (options = {}) {
 
     const {
         searchButton = '#search-button',
+        searchTriggerInput = '.search-trigger-input',
         searchField = '#search-field',
         resultContainer = '#search-results',
         url = '/search-index.json'
     } = options;
 
     const searchButtonEl = document.querySelector(searchButton);
+    const searchTriggerInputEl = document.querySelector(searchTriggerInput);
 
     let idx = null;
     let documents = null;
@@ -39,11 +41,34 @@ const setupSearch = function (options = {}) {
         searchQuery = null;
     }
 
-    searchButtonEl.addEventListener("click", openSearch);
+    if (searchButtonEl) {
+        searchButtonEl.addEventListener("click", openSearch);
+    }
+
+    if (searchTriggerInputEl) {
+        searchTriggerInputEl.addEventListener("click", openSearch);
+    }
     closeSearch.addEventListener("click", closeSearchOverlay);
-    document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") {
+
+    // Close search when clicking on the overlay background
+    searchOverlay.addEventListener("click", function(e) {
+        if (e.target === searchOverlay) {
             closeSearchOverlay();
+        }
+    });
+
+    document.addEventListener("keydown", function (e) {
+        const isSearchActive = searchOverlay.classList.contains("active");
+
+        // Escape: close search only if active
+        if (e.key === "Escape" && isSearchActive) {
+            closeSearchOverlay();
+        }
+
+        // Cmd+K or Ctrl+K: open search only if not active
+        if ((e.metaKey || e.ctrlKey) && e.key === "k" && !isSearchActive) {
+            e.preventDefault();
+            openSearch(e);
         }
     });
 
@@ -58,18 +83,17 @@ const setupSearch = function (options = {}) {
         documents = data;
         idx = lunr(function () {
             this.ref('id')
-            this.field('fragment', {boost: 5})
-            this.field('title', {boost: 10})
+            this.field('title', {boost: 2})
             this.field('summary')
-            this.field('tags', {boost: 50})
-            this.field('content', {boost: 100})
+            this.field('tags', {boost: 1.5})
+            this.field('content')
 
 
             for (const [key, entry] of Object.entries(documents)) {
                 entry.content = decodeHtml(entry.content);
                 entry.id = key
                 const boost = entry.boost ?? 1
-                this.add(entry, { boost })
+                this.add(entry, {boost})
             }
         })
         console.log('idx ready')
@@ -136,10 +160,19 @@ const setupSearch = function (options = {}) {
             documentHitContent.appendChild(documentKeywords)
         }
 
+        const documentUrl = document.createElement('div')
+        documentUrl.classList.add('search-result-url')
+        try {
+            documentUrl.textContent = new URL(doc.url).pathname
+        } catch (e) {
+            documentUrl.textContent = doc.url
+        }
+
         const searchResultItem = document.createElement('a')
         searchResultItem.href = doc.url
         searchResultItem.classList.add('search-result-item')
         searchResultItem.appendChild(documentTitle)
+        searchResultItem.appendChild(documentUrl)
         searchResultItem.appendChild(documentHit)
         searchResultItem.addEventListener('mousedown', function (e) {
             e.preventDefault();
@@ -487,7 +520,7 @@ const setupSearch = function (options = {}) {
     enableSearchInput(false);
 
 
-    fetch('/search-index.json')
+    fetch(options.url)
         .then(response => response.json())
         .then(feedLoaded)
         .catch(error => console.error('Error loading feed:', error));

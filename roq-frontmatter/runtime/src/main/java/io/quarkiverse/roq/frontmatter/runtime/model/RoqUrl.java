@@ -5,10 +5,11 @@ import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.Set;
 
 import jakarta.enterprise.inject.Vetoed;
 
-import io.quarkiverse.roq.util.PathUtils;
+import io.quarkiverse.tools.stringpaths.StringPaths;
 import io.quarkus.qute.TemplateData;
 
 /**
@@ -22,6 +23,17 @@ import io.quarkus.qute.TemplateData;
 public record RoqUrl(
         RootUrl root,
         String resourcePath) {
+
+    /**
+     * The accepted URI schemes (lowercase) considered as full/external paths. Any link with one of
+     * these schemes is preserved as-is instead of being resolved as a relative path against the site root.
+     * <p>
+     * To add support for an additional scheme, add it here.
+     */
+    private static final Set<String> ACCEPTED_URI_SCHEMES = Set.of(
+            "http", "https", "mailto", "tel", "data", "javascript", "ftp", "ftps",
+            "irc", "file", "git", "ssh", "sftp", "sms", "geo", "news", "nntp",
+            "magnet", "bitcoin", "ethereum", "skype", "facetime", "whatsapp");
 
     public RoqUrl(RootUrl root, String resourcePath) {
         this.resourcePath = resourcePath;
@@ -53,7 +65,7 @@ public record RoqUrl(
         if (isExternal()) {
             return resourcePath();
         }
-        final String path = PathUtils.join(root.rootPath(), resourcePath());
+        final String path = StringPaths.join(root.rootPath(), resourcePath());
         return encoded ? encode(path) : path;
     }
 
@@ -79,7 +91,7 @@ public record RoqUrl(
         if (isExternal()) {
             return resourcePath();
         }
-        return PathUtils.join(root().url(), path());
+        return StringPaths.join(root().url(), path());
     }
 
     /**
@@ -90,13 +102,17 @@ public record RoqUrl(
     }
 
     /**
-     * Check if this is a full path starting with http:// or https://
+     * Check if this is a full path starting with one of the {@link #ACCEPTED_URI_SCHEMES}.
      *
-     * @return true is it's a full path url
+     * @return true if it's a full path url
      */
     public static boolean isFullPath(String path) {
         Objects.requireNonNull(path, "path is required");
-        return path.startsWith("http://") || path.startsWith("https://");
+        int colonIndex = path.indexOf(':');
+        if (colonIndex <= 0) {
+            return false;
+        }
+        return ACCEPTED_URI_SCHEMES.contains(path.substring(0, colonIndex).toLowerCase());
     }
 
     /**
@@ -110,7 +126,7 @@ public record RoqUrl(
         if (isFullPath(other.toString())) {
             return new RoqUrl(null, other.toString());
         }
-        return new RoqUrl(root(), PathUtils.join(resourcePath(), other.toString()));
+        return new RoqUrl(root(), StringPaths.join(resourcePath(), other.toString()));
     }
 
     /**
@@ -155,6 +171,88 @@ public record RoqUrl(
             return new RoqUrl(null, resourcePath);
         }
         return new RoqUrl(root, resourcePath);
+    }
+
+    /**
+     * Check if the URL path starts with the given prefix
+     *
+     * @param prefix the prefix to check
+     * @return true if the path starts with the prefix
+     */
+    public boolean startsWith(String prefix) {
+        return path().startsWith(prefix);
+    }
+
+    /**
+     * Check if the URL path contains the given string.
+     *
+     * @param str the string to search for
+     * @return true if the path contains the string
+     */
+    public boolean contains(String str) {
+        return path().contains(str);
+    }
+
+    /**
+     * Replace all literal occurrences of target with replacement.
+     *
+     * @param target the string to replace
+     * @param replacement the replacement string
+     * @return a new RoqUrl with the replaced path
+     */
+    public RoqUrl replace(String target, String replacement) {
+        String newPath = resourcePath().replace(target, replacement);
+        return new RoqUrl(root(), newPath);
+    }
+
+    /**
+     * Replace all occurrences matching the regex with the replacement.
+     *
+     * @param regex the regular expression
+     * @param replacement the replacement string
+     * @return a new RoqUrl with the replaced path
+     */
+    public RoqUrl replaceAll(String regex, String replacement) {
+        String newPath = resourcePath().replaceAll(regex, replacement);
+        return new RoqUrl(root(), newPath);
+    }
+
+    /**
+     * Check if this url path matches the given path exactly (ignoring trailing slash).
+     *
+     * @param path the path to check against (including root path if configured)
+     */
+    public boolean isActive(String path) {
+        return normalize(path()).equals(normalize(path));
+    }
+
+    /**
+     * Returns "active" if this url matches one of the given paths, an empty string otherwise.
+     *
+     * @param paths the paths to check against (including root path if configured)
+     */
+    public String nav(String... paths) {
+        for (String path : paths) {
+            if (isActive(path)) {
+                return "active";
+            }
+        }
+        return "";
+    }
+
+    private static String normalize(String path) {
+        return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+    }
+
+    /**
+     * Remove the first occurrence of the given string from the path
+     *
+     * @param str the string to remove
+     * @return a new RoqUrl with the string removed
+     */
+    public RoqUrl removeFirst(String str) {
+        String newPath = resourcePath().replaceFirst(java.util.regex.Pattern.quote(str), "");
+        return new RoqUrl(root(), newPath);
     }
 
 }

@@ -1,0 +1,199 @@
+package io.quarkiverse.roq.cli;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.commons.io.FileUtils;
+
+import io.quarkus.devtools.commands.CreateProject;
+import io.quarkus.devtools.commands.CreateProjectHelper;
+import io.quarkus.devtools.commands.data.QuarkusCommandOutcome;
+import io.quarkus.devtools.project.BuildTool;
+import io.quarkus.devtools.project.QuarkusProject;
+import io.quarkus.devtools.project.QuarkusProjectHelper;
+import io.quarkus.registry.catalog.ExtensionCatalog;
+
+/**
+ * Programmatic API for creating Roq projects.
+ * Can be used by other libraries or tools to scaffold Roq sites.
+ */
+public class RoqProjectCreator {
+
+    public static final String ROQ_GROUP_ID = "io.quarkiverse.roq";
+    public static final String ROQ_EXTENSION = ROQ_GROUP_ID + ":quarkus-roq";
+    public static final String ROQ_PREFIX = ROQ_GROUP_ID + ":quarkus-roq-";
+
+    private final Path projectDir;
+    private final String artifactId;
+    private String groupId = "io.acme";
+    private String version = "1.0.0-SNAPSHOT";
+    private String roqVersion;
+    private BuildTool buildTool = BuildTool.MAVEN;
+    private boolean noCode;
+    private boolean noConfig;
+    private List<String> extensions;
+
+    public RoqProjectCreator(Path projectDir, String artifactId) {
+        this.projectDir = projectDir;
+        this.artifactId = artifactId;
+    }
+
+    public RoqProjectCreator groupId(String groupId) {
+        this.groupId = groupId;
+        return this;
+    }
+
+    public RoqProjectCreator version(String version) {
+        this.version = version;
+        return this;
+    }
+
+    public RoqProjectCreator roqVersion(String roqVersion) {
+        this.roqVersion = roqVersion;
+        return this;
+    }
+
+    public RoqProjectCreator buildTool(BuildTool buildTool) {
+        this.buildTool = buildTool;
+        return this;
+    }
+
+    public RoqProjectCreator noCode(boolean noCode) {
+        this.noCode = noCode;
+        return this;
+    }
+
+    public RoqProjectCreator noConfig(boolean noConfig) {
+        this.noConfig = noConfig;
+        return this;
+    }
+
+    public RoqProjectCreator extensions(List<String> extensions) {
+        this.extensions = extensions;
+        return this;
+    }
+
+    /**
+     * Create the Roq project.
+     *
+     * @return true if the project was created successfully
+     */
+    public boolean create() throws Exception {
+        Set<String> allExtensions = new LinkedHashSet<>();
+        allExtensions.add(withVersion(ROQ_EXTENSION));
+
+        if (extensions != null) {
+            for (String ext : extensions) {
+                String resolved = resolveExtension(ext.trim());
+                if (resolved != null) {
+                    allExtensions.add(withVersion(resolved));
+                }
+            }
+        }
+
+        // Add default theme when no theme extension is specified
+        if ((extensions == null || extensions.stream().noneMatch(e -> e.trim().startsWith("theme:")))
+                && allExtensions.stream().noneMatch(e -> e.contains("roq-theme-"))) {
+            allExtensions.add(withVersion(ROQ_PREFIX + "theme-default"));
+        }
+
+        Set<String> extraCodestarts = new LinkedHashSet<>();
+        extraCodestarts.add("roq-project-codestart");
+        if (allExtensions.stream().noneMatch(e -> e.contains("roq-theme-"))) {
+            extraCodestarts.add("roq-base-theme-codestart");
+        }
+
+        ExtensionCatalog catalog = QuarkusProjectHelper.resolveExtensionCatalog();
+        catalog = CreateProjectHelper.completeCatalog(catalog, allExtensions, QuarkusProjectHelper.artifactResolver());
+        QuarkusProject qp = QuarkusProjectHelper.getProject(projectDir, catalog, buildTool);
+
+        CreateProject createProject = new CreateProject(qp)
+                .groupId(groupId)
+                .artifactId(artifactId)
+                .version(version)
+                .extensions(allExtensions)
+                .extraCodestarts(extraCodestarts);
+
+        if (allExtensions.stream().noneMatch(e -> e.contains("roq-plugin-hybrid"))) {
+            createProject.noDockerfiles();
+        }
+
+        if (noCode) {
+            createProject.noCode();
+        }
+
+        QuarkusCommandOutcome outcome = createProject.execute();
+
+        if (outcome.isSuccess()) {
+            postCreate(allExtensions);
+            return true;
+        }
+        return false;
+    }
+
+    private void postCreate(Set<String> allExtensions) throws IOException {
+        if (!noConfig) {
+            // Move application.properties to config/
+            Path propsSource = projectDir.resolve("src/main/resources/application.properties");
+            Path configDir = projectDir.resolve("config");
+            Files.createDirectories(configDir);
+            Path propsDest = configDir.resolve("application.properties");
+            if (Files.exists(propsSource)) {
+                Files.move(propsSource, propsDest);
+            } else {
+                Files.createFile(propsDest);
+            }
+        }
+
+        deleteDirIfNoFiles(projectDir.resolve("src"));
+    }
+
+    private String withVersion(String gav) {
+        String[] parts = gav.split(":");
+        if (roqVersion != null && parts.length == 2 && parts[0].equals(ROQ_GROUP_ID)) {
+            return gav + ":" + roqVersion;
+        }
+        return gav;
+    }
+
+    /**
+     * Resolve a short extension name to a full GAV coordinate.
+     * Supports: "theme:default", "plugin:tagging", "web:sass", or full GAV.
+     */
+    public static String resolveExtension(String value) {
+        if (value.contains(":") && !value.startsWith("theme:") && !value.startsWith("plugin:")
+                && !value.startsWith("web:")) {
+            return value;
+        }
+        if (value.startsWith("theme:")) {
+            if (value.equals("theme:base")) {
+                return null;
+            }
+            return ROQ_PREFIX + "theme-" + value.substring(6);
+        }
+        if (value.startsWith("plugin:")) {
+            return ROQ_PREFIX + "plugin-" + value.substring(7);
+        }
+        if (value.startsWith("web:")) {
+            return "io.quarkiverse.web-bundler:quarkus-web-bundler-" + value.substring(4);
+        }
+        return value;
+    }
+
+    private static void deleteDirIfNoFiles(Path dir) throws IOException {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (var stream = Files.find(dir, Integer.MAX_VALUE, (p, a) -> a.isRegularFile())) {
+            if (stream.findAny().isPresent()) {
+                return;
+            }
+        }
+        FileUtils.deleteDirectory(dir.toFile());
+    }
+
+}

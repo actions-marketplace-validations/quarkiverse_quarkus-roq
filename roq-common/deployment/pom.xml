@@ -20,6 +20,11 @@
             <version>${quarkus-web-bundler.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.quarkiverse.tools</groupId>
+            <artifactId>quarkus-project-scanner</artifactId>
+            <version>${quarkus-web-bundler.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
         </dependency>
@@ -30,7 +35,7 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5-internal</artifactId>
+            <artifactId>quarkus-junit-internal</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

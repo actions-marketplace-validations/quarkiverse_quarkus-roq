@@ -10,4 +10,24 @@
     </parent>
     <artifactId>quarkus-roq-common</artifactId>
     <name>Quarkus Roq - Common</name>
+    <dependencies>
+        <dependency>
+            <groupId>io.quarkiverse.tools</groupId>
+            <artifactId>string-paths</artifactId>
+            <version>${quarkus-web-bundler.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

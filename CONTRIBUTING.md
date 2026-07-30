@@ -2,6 +2,8 @@
 
 **Want to contribute? Great!** We try to make it easy, and all contributions, even the smaller ones, are more than welcome. This includes bug reports, fixes, documentation, examples... But first, read this page.
 
+Roq is part of the Quarkus ecosystem, contributions should follow the same principles when applicable (https://github.com/quarkusio/quarkus/blob/main/CONTRIBUTING.md).
+
 ## Reporting an issue
 
 This project uses GitHub issues to manage the issues. Open an issue directly in GitHub.
@@ -12,6 +14,12 @@ what you would expect to see. Don't forget to indicate your Quarkus, Java, Maven
 ## Tests and documentation are not optional
 
 Don't forget to include tests in your pull requests. Also don't forget the documentation (reference documentation, javadoc, etc.).
+
+## LLM Usage Policy
+
+See https://github.com/quarkusio/quarkus/blob/main/CONTRIBUTING.md#llm-usage-policy
+
+Moreover, once the commit is shared, it belongs to you, there should not be any `co-authored by` usage. You are fully accountable for your commits. 
 
 ### Running
 
@@ -37,36 +45,37 @@ mvn clean install
 
 ## Running Blog
 
-There are two ways for running the blog post locally:
+There are two ways for running the blog locally:
 
 - **With live reload:** Great when you are writing your blog.
-- **Serving your static site:** When you want to see how your blog looks, before the deployment.
+- **Serving your static site:** When you want to see how your blog looks before deployment.
 
 ### Running with live reload
 
-Go to `blog` directory:
+Using the [Roq CLI](https://iamroq.dev/docs/):
 
 ```shell
-cd blog
+cd blog && roq start
 ```
 
-And, to execute the following maven command:
+Or using Maven directly:
 
 ```shell
-mvn quarkus:dev
-```
-
-If you are using Quarkus CLI, you can use:
-
-```shell
-quarkus dev
+cd blog && mvn quarkus:dev
 ```
 
 Now, you can access: http://localhost:8080 and be happy!
 
+Press `s` in the dev terminal to force a soft restart (useful after rebuilding a module). If changes are still not picked up, kill the server and restart it.
+
 ### Serving your static site
 
-See our documentation to see [how to generate your static files](https://docs.quarkiverse.io/quarkus-roq/dev/quarkus-roq-generator.html#_generating_your_static_site).
+```shell
+cd blog && roq generate
+roq serve
+```
+
+See the [Roq documentation](https://iamroq.dev/docs/) for more details.
 
 ## For the maintainers
 

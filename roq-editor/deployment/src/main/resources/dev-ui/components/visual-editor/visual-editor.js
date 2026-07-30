@@ -2,6 +2,7 @@ import '@qomponent/qui-code-block';
 import '@vaadin/button';
 import '@vaadin/icon';
 import {css, html} from 'lit';
+import {assistantIsAvailable} from 'build-time-data';
 import {
     BubbleMenu,
     Placeholder,
@@ -21,6 +22,7 @@ import {combineFrontmatter, parseAndFormatDate, parseFrontmatter} from '../../ut
 import {editorContext} from './editor-context.js';
 import './bubble-menu.js';
 import './table-menu.js';
+import './code-block-menu.js';
 import './frontmatter-panel.js';
 import './gutter-menu.js';
 import '../preview-panel.js';
@@ -238,7 +240,12 @@ export class RoqVisualEditor extends BaseEditor {
             }
             .tiptap.ProseMirror .tiptap-image-img {
                 border-radius: .25rem;
-            }            
+            }
+
+            .tiptap-editor pre {
+                position: relative;
+                padding-top: 2.25rem;
+            }
         `,
     ];
 
@@ -401,7 +408,10 @@ export class RoqVisualEditor extends BaseEditor {
                 render: () => this.shadowRoot.getElementById('gutter-menu'),
                 dragHandleWidth: 24,
             }),
-            SlashCommand,
+            SlashCommand.configure({
+                getPagePath: () => this.page?.path || '',
+                assistantIsAvailable: assistantIsAvailable,
+            }),
             Placeholder.configure({
                 placeholder: "Write some text, or type '/' for blocks & commands",
             }),
@@ -436,7 +446,7 @@ export class RoqVisualEditor extends BaseEditor {
             onSelectionUpdate: () => this.requestUpdate(),
         });
 
-        this._provider.setValue({editor: this._editor, editorElement: this._editorElement});
+        this._provider.setValue({editor: this._editor, editorElement: this._editorElement, pagePath: this.page?.path || ''});
         // Move selection to end
         this._editor.commands.setTextSelection(this._editor.state.doc.content.size);
         // Focus
@@ -515,6 +525,7 @@ export class RoqVisualEditor extends BaseEditor {
                 <div class="tiptap-editor">
                   <qwc-bubble-menu style="visibility: hidden; position: absolute;"></qwc-bubble-menu>
                   <qwc-table-menu></qwc-table-menu>
+                  <qwc-code-block-menu></qwc-code-block-menu>
                   <qwc-gutter-menu id="gutter-menu" style="visibility: hidden;"></qwc-gutter-menu>
                 </div>
               </div>
@@ -524,7 +535,7 @@ export class RoqVisualEditor extends BaseEditor {
                   id="code-editor"
                   showlinenumbers
                   editable
-                  mode="${this.fileExtension}"
+                  mode="${this.page.extension}"
                   @value-changed="${this._onCodeBlockChange}"
                 >
                 </qui-themed-code-block>
@@ -534,6 +545,7 @@ export class RoqVisualEditor extends BaseEditor {
                 .frontmatter="${this._frontmatter}"
                 .date="${this.page.date}"
                 .dateFormat="${this.dateFormat}"
+                .pagePath="${this.page?.path || ''}"
                 @frontmatter-changed="${this._onFrontmatterChanged}"
               >
               </qwc-frontmatter-panel>

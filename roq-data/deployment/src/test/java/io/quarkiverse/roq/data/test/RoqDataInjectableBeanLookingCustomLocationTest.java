@@ -8,15 +8,15 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vertx.core.json.JsonObject;
 
 public class RoqDataInjectableBeanLookingCustomLocationTest {
 
     @RegisterExtension
-    final static QuarkusUnitTest devMode = new QuarkusUnitTest()
+    final static QuarkusExtensionTest devMode = new QuarkusExtensionTest()
             .withApplicationRoot((jar) -> jar
-                    .add(new StringAsset("quarkus.roq.dir=./\nquarkus.roq.data.dir=test-data\n"),
+                    .add(new StringAsset("quarkus.roq.dir=./site\nquarkus.roq.data.dir=test-data\n"),
                             "application.properties"));
 
     @Inject

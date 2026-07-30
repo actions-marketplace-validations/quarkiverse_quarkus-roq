@@ -4,6 +4,8 @@ name: Quarkus Roq Deploy Blog CI
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'blog/**'
   schedule:
     - cron: "0 5 * * *"  # Runs every day at 05:00 UTC (10:30 AM IST)
   workflow_dispatch:
@@ -16,12 +18,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       ####
       # We need to build Roq first because we use 999-SNAPSHOT (it's not needed in your website)
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: 21
           distribution: 'temurin'
@@ -52,4 +54,10 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+      - name: Notify IndexNow
+        if: success()
+        run: |
+          curl -s -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d '{"host":"iamroq.dev","key":"700D2C03-9B39-4AFC-BC2F-ED4ACDE45AF5","keyLocation":"https://iamroq.dev/700D2C03-9B39-4AFC-BC2F-ED4ACDE45AF5.txt","urlList":["https://iamroq.dev/sitemap.xml"]}'

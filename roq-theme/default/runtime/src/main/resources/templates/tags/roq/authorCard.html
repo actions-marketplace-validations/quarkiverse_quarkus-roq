@@ -1,0 +1,13 @@
+  <div class="card author-card">
+    <div class="avatar">
+      {#if avatar??}
+      <img src="{cdi:site.image(avatar)}" alt="{name}'s Avatar"/>
+      {#else}
+      <img src="{cdi:site.image('roq-default/default-avatar.svg')}" alt="{name}'s Avatar"/>
+      {/if}
+    </div>
+    <div class="details">
+      <h2 class="name">{name}</h2>
+      {#if nested-content??}{nested-content}{/if}<a href="{profile}" target="_blank" rel="noopener noreferrer" class="login">@{nickname}</a>
+    </div>
+  </div>

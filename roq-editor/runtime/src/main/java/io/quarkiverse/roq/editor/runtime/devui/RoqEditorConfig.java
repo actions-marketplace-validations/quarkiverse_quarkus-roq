@@ -1,12 +1,20 @@
 package io.quarkiverse.roq.editor.runtime.devui;
 
+import java.util.Map;
+import java.util.Optional;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
+import io.smallrye.config.WithName;
 
+/**
+ * Configuration for the Roq editor extension.
+ */
 @ConfigMapping(prefix = "editor")
 @ConfigRoot(phase = ConfigPhase.BUILD_AND_RUN_TIME_FIXED)
 public interface RoqEditorConfig {
@@ -57,21 +65,136 @@ public interface RoqEditorConfig {
     }
 
     /**
-     * Suggested path configuration
-     *
-     * @return
+     * Per-collection editor configuration.
+     * Keys are collection IDs (e.g., "posts", "docs").
      */
-    @JsonProperty("suggestedPath")
-    SuggestedPathConfig suggestedPath();
+    @JsonIgnore
+    @WithName("collections")
+    Map<String, CollectionEditorConfig> collectionsMap();
 
-    interface SuggestedPathConfig {
+    String DEFAULT_COLLECTION_NAME_PATTERN = ":date-:slug~7";
+
+    interface CollectionEditorConfig {
 
         /**
-         * If enabled, Editor will suggest file path sync when it differs from content.
+         * File name pattern using link-style placeholders.
+         * Supported: :date, :slug, :Slug, :name, :Name, :year, :month, :day.
+         * Use ~W to truncate to W hyphen-separated words (e.g., :slug~7).
+         */
+        @WithDefault(DEFAULT_COLLECTION_NAME_PATTERN)
+        String name();
+
+        /**
+         * If enabled, auto-sync file names when they match the convention and the title/date changes.
+         */
+        @WithDefault("true")
+        boolean syncName();
+    }
+
+    /**
+     * Git sync configuration
+     */
+    @JsonProperty("sync")
+    SyncConfig sync();
+
+    interface SyncConfig {
+
+        /**
+         * Enable Git sync feature (commit, push, pull via the Editor UI)
          */
         @JsonProperty("enabled")
-        @WithDefault("true")
+        @WithDefault("false")
         boolean enabled();
+
+        /**
+         * Optional SSH passphrase used as a fallback when no SSH agent is available to unlock a
+         * passphrase-protected key for remote operations.
+         * <p>
+         * Most users do not need this: JGit uses the system SSH agent (macOS Keychain, {@code ssh-agent},
+         * Pageant) automatically. Set it only when no agent is running.
+         * <p>
+         * For security, provide it via the {@code EDITOR_SYNC_SSH_PASSPHRASE} environment variable or a
+         * non-version-controlled config file (e.g. {@code .env}). Never commit it to
+         * {@code application.properties}. It is never sent to the browser.
+         */
+        @JsonIgnore
+        Optional<String> sshPassphrase();
+
+        /**
+         * Auto-sync configuration (pull from remote)
+         */
+        @JsonProperty("autoSync")
+        AutoSyncConfig autoSync();
+
+        interface AutoSyncConfig {
+            /**
+             * Enable automatic sync (pull) from remote
+             */
+            @JsonProperty("enabled")
+            @WithDefault("false")
+            boolean enabled();
+
+            /**
+             * Auto-sync interval in seconds
+             */
+            @JsonProperty("intervalSeconds")
+            @WithDefault("60")
+            int intervalSeconds();
+        }
+
+        /**
+         * Auto-publish configuration (commit + push)
+         */
+        @JsonProperty("autoPublish")
+        AutoPublishConfig autoPublish();
+
+        interface AutoPublishConfig {
+            /**
+             * Enable automatic publish (commit + push) on content changes
+             */
+            @JsonProperty("enabled")
+            @WithDefault("false")
+            boolean enabled();
+
+            /**
+             * Auto-publish interval in seconds
+             */
+            @JsonProperty("intervalSeconds")
+            @WithDefault("300")
+            int intervalSeconds();
+        }
+
+        /**
+         * Commit message configuration
+         */
+        @JsonProperty("commitMessage")
+        CommitMessageConfig commitMessage();
+
+        interface CommitMessageConfig {
+            /**
+             * Default commit message template
+             */
+            @JsonProperty("template")
+            @WithDefault("Update content via Roq Editor")
+            String template();
+        }
+    }
+
+    /**
+     * AI content generation configuration
+     */
+    @JsonIgnore
+    AiConfig ai();
+
+    interface AiConfig {
+
+        /**
+         * Custom context to include in every AI content generation request.
+         * Use this to set the tone, topic, or style for your blog.
+         * For example: "This is a tech blog about Quarkus. Write in a friendly, concise tone."
+         */
+        @JsonProperty("context")
+        Optional<String> context();
 
     }
 

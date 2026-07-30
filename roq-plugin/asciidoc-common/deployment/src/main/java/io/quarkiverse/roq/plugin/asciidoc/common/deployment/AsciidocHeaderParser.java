@@ -1,24 +1,32 @@
 package io.quarkiverse.roq.plugin.asciidoc.common.deployment;
 
-import static io.quarkiverse.roq.frontmatter.deployment.scan.RoqFrontMatterScanProcessor.ESCAPE_KEY;
-import static io.quarkiverse.roq.frontmatter.deployment.scan.RoqFrontmatterTemplateUtils.stripFrontMatter;
+import static io.quarkiverse.roq.frontmatter.deployment.util.RoqFrontMatterTemplateUtils.stripFrontMatter;
+import static io.quarkiverse.roq.frontmatter.runtime.RoqFrontMatterKeys.DESCRIPTION;
+import static io.quarkiverse.roq.frontmatter.runtime.RoqFrontMatterKeys.ESCAPE;
+import static io.quarkiverse.roq.frontmatter.runtime.RoqFrontMatterKeys.TITLE;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
 
-import io.quarkiverse.roq.frontmatter.deployment.scan.RoqFrontMatterHeaderParserBuildItem;
-import io.quarkiverse.roq.frontmatter.deployment.scan.TemplateContext;
-import io.quarkiverse.roq.frontmatter.runtime.model.Page;
+import io.quarkiverse.roq.frontmatter.deployment.items.scan.RoqFrontMatterHeaderParserBuildItem;
+import io.quarkiverse.roq.frontmatter.deployment.items.scan.TemplateContext;
 import io.vertx.core.json.JsonObject;
 import io.yupiik.asciidoc.model.Header;
 import io.yupiik.asciidoc.parser.Parser;
@@ -29,13 +37,31 @@ import io.yupiik.asciidoc.parser.resolver.RelativeContentResolver;
 public class AsciidocHeaderParser {
     private static final Logger LOGGER = org.jboss.logging.Logger.getLogger(AsciidocHeaderParser.class);
 
-    private static final ContentResolver EMPTY_CONTENT_RESOLVER = (ref, encoding) -> Optional.empty();
     private static final String QUTE_KEY = "qute";
+
+    // Pattern used to short-circuit more complex evaluation
+    private static final Pattern SIMPLE_CONDITIONAL = Pattern
+            .compile("ifn?(?:def|eval)");
+
+    // Mirrors Asciidoctor's ConditionalDirectiveRx — one pattern for all conditional directives.
+    // group 1: leading backslash (escaped directive, treat as literal text)
+    // group 2: directive name (ifdef, ifndef, ifeval, endif)
+    // group 3: target attributes (may be empty for endif/ifeval)
+    // group 4: bracket content (null for empty brackets = block form, non-null = inline form)
+    private static final Pattern CONDITIONAL_DIRECTIVE = Pattern
+            .compile("^(\\\\)?(ifdef|ifndef|ifeval|endif)::(\\S*?)\\[(.+)?\\]\\s*$");
+
+    // Matches attribute entries: :name: value, :!name: (unset), :name!: (unset)
+    private static final Pattern ATTRIBUTE_ENTRY = Pattern.compile("^:(!?\\w[^:]*):(?:[ \\t]+(.*))?$");
 
     public static RoqFrontMatterHeaderParserBuildItem createBuildItem(boolean qute, Predicate<TemplateContext> isApplicable) {
         return new RoqFrontMatterHeaderParserBuildItem(isApplicable, templateContext -> {
             Parser parser = new Parser();
             String content = stripFrontMatter(templateContext.content());
+            if (SIMPLE_CONDITIONAL.matcher(content).find()) {
+                content = stripConditionalDirectives(content);
+            }
+
             ContentResolver contentResolver = new PathContentResolver(templateContext.sourceFile().getParent());
             Header header = parser.parseHeader(new Reader(content.lines().toList()),
                     new Parser.ParserContext(contentResolver));
@@ -47,8 +73,8 @@ public class AsciidocHeaderParser {
                 escape = !(quteAttribute.isEmpty() || Boolean.parseBoolean(quteAttribute));
             }
 
-            if (!pageData.containsKey(ESCAPE_KEY)) {
-                pageData.put(ESCAPE_KEY, escape);
+            if (!pageData.containsKey(ESCAPE)) {
+                pageData.put(ESCAPE, escape);
             }
             return pageData;
         }, Function.identity(), 20);
@@ -65,10 +91,10 @@ public class AsciidocHeaderParser {
             }
         }
         if (!header.title().isBlank()) {
-            pageData.put(Page.FM_TITLE, header.title());
+            pageData.put(TITLE, header.title());
         }
-        if (header.attributes().containsKey(Page.FM_DESCRIPTION) && !header.attributes().get(Page.FM_DESCRIPTION).isBlank()) {
-            pageData.put(Page.FM_DESCRIPTION, header.attributes().get("description"));
+        if (header.attributes().containsKey(DESCRIPTION) && !header.attributes().get(DESCRIPTION).isBlank()) {
+            pageData.put(DESCRIPTION, header.attributes().get("description"));
         }
         if (!header.author().name().isBlank()) {
             pageData.put("author", header.author().name());
@@ -81,7 +107,7 @@ public class AsciidocHeaderParser {
                     .put("remark", header.revision().revmark()));
         }
         if (attributes.containsKey("description")) {
-            pageData.put(Page.FM_DESCRIPTION, attributes.get("description"));
+            pageData.put(DESCRIPTION, attributes.get("description"));
         }
         if (attributes.containsKey("image")) {
             pageData.put("image", attributes.get("image"));
@@ -103,6 +129,113 @@ public class AsciidocHeaderParser {
         }
 
         return result;
+    }
+
+    // Pre-process ifdef/ifndef/endif/ifeval directives, evaluating conditions against
+    // attributes defined so far in the header. This mirrors (in simplified form) what the
+    // reference Asciidoctor preprocessor does before header parsing.
+    // NOTE: attributes set externally (e.g. via quarkus.asciidoc.attributes in the pom or
+    // environment variables) are not yet available here — only attributes defined within the
+    // document header itself are tracked. Supporting external attributes would require threading
+    // the configured attribute map from AsciidoctorJConfig into the header parser.
+    // Environment attributes (env-github, env-browser, env-vscode, env-site) are set by external
+    // rendering tools, not by AsciiDoc itself. Roq is its own SSG so none of these apply — they
+    // will always be undefined here, which is correct.
+    static String stripConditionalDirectives(String content) {
+        List<String> result = new ArrayList<>();
+        Deque<Boolean> includeStack = new ArrayDeque<>();
+        Set<String> definedAttributes = new HashSet<>();
+
+        for (String line : (Iterable<String>) content.lines()::iterator) {
+            Matcher m = CONDITIONAL_DIRECTIVE.matcher(line);
+            if (m.matches()) {
+                if (m.group(1) != null) {
+                    // Escaped directive (\ifdef::...) — pass through as literal text without the backslash
+                    if (isIncluding(includeStack)) {
+                        result.add(line.substring(1));
+                    }
+                    continue;
+                }
+
+                LOGGER.debugf("Stripping conditional directive from AsciiDoc header: '%s'", line);
+                String directive = m.group(2);
+                String target = m.group(3);
+                String bracketContent = m.group(4);
+
+                switch (directive) {
+                    case "ifdef", "ifndef" -> {
+                        if (bracketContent == null) {
+                            // Block form: ifdef::attr[] ... endif::[]
+                            boolean include = isIncluding(includeStack)
+                                    && evaluateCondition(directive, target, definedAttributes);
+                            includeStack.push(include);
+                        } else {
+                            // Inline form: ifdef::attr[content]
+                            if (isIncluding(includeStack)
+                                    && evaluateCondition(directive, target, definedAttributes)) {
+                                result.add(bracketContent);
+                                trackAttribute(bracketContent, definedAttributes);
+                            }
+                        }
+                    }
+                    case "endif" -> {
+                        if (!includeStack.isEmpty()) {
+                            includeStack.pop();
+                        }
+                    }
+                    case "ifeval" -> includeStack.push(isIncluding(includeStack));
+                }
+                continue;
+            }
+
+            if (isIncluding(includeStack)) {
+                result.add(line);
+                trackAttribute(line, definedAttributes);
+            }
+        }
+
+        return String.join("\n", result);
+    }
+
+    private static boolean isIncluding(Deque<Boolean> includeStack) {
+        return !includeStack.contains(false);
+    }
+
+    // Evaluates an ifdef/ifndef condition against the set of currently defined attributes.
+    // Supports comma-separated (OR) and plus-separated (AND) attribute lists.
+    // ifdef: include if condition is true; ifndef: include if condition is false.
+    private static final Pattern COMMA = Pattern.compile(",");
+    private static final Pattern PLUS = Pattern.compile("\\+");
+
+    static boolean evaluateCondition(String directive, String attributes, Set<String> definedAttributes) {
+        boolean defined;
+        if (attributes.contains(",")) {
+            defined = COMMA.splitAsStream(attributes)
+                    .map(String::trim)
+                    .anyMatch(definedAttributes::contains);
+        } else if (attributes.contains("+")) {
+            defined = PLUS.splitAsStream(attributes)
+                    .map(String::trim)
+                    .allMatch(definedAttributes::contains);
+        } else {
+            defined = definedAttributes.contains(attributes.trim());
+        }
+
+        return "ifdef".equals(directive) ? defined : !defined;
+    }
+
+    private static void trackAttribute(String line, Set<String> definedAttributes) {
+        Matcher attr = ATTRIBUTE_ENTRY.matcher(line);
+        if (attr.matches()) {
+            String raw = attr.group(1);
+            boolean unset = raw.startsWith("!") || raw.endsWith("!");
+            String name = unset ? raw.replace("!", "") : raw;
+            if (unset) {
+                definedAttributes.remove(name);
+            } else {
+                definedAttributes.add(name);
+            }
+        }
     }
 
     static class PathContentResolver implements RelativeContentResolver {

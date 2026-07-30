@@ -1,16 +1,14 @@
 package io.quarkiverse.roq.data.deployment;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Singleton;
 
 import org.jboss.logging.Logger;
 
+import io.quarkiverse.roq.EncodedJson;
 import io.quarkiverse.roq.data.deployment.items.RoqDataBeanBuildItem;
 import io.quarkiverse.roq.data.deployment.items.RoqDataJsonBuildItem;
 import io.quarkiverse.roq.data.runtime.RoqDataRecorder;
@@ -49,24 +47,7 @@ class RoqDataBeanProcessor {
 
         List<String> beans = new ArrayList<>(roqDataJsonBuildItems.size());
 
-        var mapOfFolders = new HashMap<String, TreeMap<String, Object>>();
         for (RoqDataJsonBuildItem roqData : roqDataJsonBuildItems) {
-            if (roqData.getName().contains("/")) {
-                // Subfolder grouping case
-                // Test that there is only one level of subfolder
-                long count = roqData.getName().chars().filter(c -> c == '/').count();
-                if (count == 1) {
-                    var fileName = roqData.getName();
-                    var key = fileName.substring(fileName.indexOf("/") + 1);
-                    var folderName = fileName.substring(0, fileName.lastIndexOf('/'));
-                    mapOfFolders.computeIfAbsent(folderName, ignored -> new TreeMap<>()).put(key, roqData.getData());
-                } else if (count > 1) {
-                    LOG.debugf(
-                            "Deeply nested data files are not processed as grouped structure: %s (only one level of nesting is supported)",
-                            roqData.getName());
-                }
-            }
-            // Let's still add the file name mapping
             final Class<?> cl;
             if (roqData.getData() instanceof JsonObject) {
                 cl = JsonObject.class;
@@ -78,7 +59,7 @@ class RoqDataBeanProcessor {
             beansProducer.produce(SyntheticBeanBuildItem.configure(cl)
                     .scope(ApplicationScoped.class)
                     .named(roqData.getName())
-                    .runtimeValue(recorder.createRoqDataJson(roqData.getData()))
+                    .runtimeValue(recorder.createRoqDataJson(EncodedJson.of(roqData.getData())))
                     .unremovable()
                     .done());
             beans.add("    - %s[name=%s]*".formatted(cl.getName(), roqData.getName()));
@@ -90,23 +71,10 @@ class RoqDataBeanProcessor {
             beansProducer.produce(SyntheticBeanBuildItem.configure(beanBuildItem.getBeanClass())
                     .scope(beanBuildItem.isRecord() ? Singleton.class : ApplicationScoped.class)
                     .named(beanBuildItem.getName())
-                    .runtimeValue(recorder.createRoqDataJson(beanBuildItem.getData()))
+                    .runtimeValue(recorder.createRoqDataBean(beanBuildItem.getData()))
                     .unremovable()
                     .done());
             beans.add("    - %s[name=%s]".formatted(beanBuildItem.getBeanClass().getName(), beanBuildItem.getName()));
-        }
-
-        // Register TreeMap beans
-        for (Map.Entry<String, TreeMap<String, Object>> entry : mapOfFolders.entrySet()) {
-            var treeMapBean = new JsonObject(entry.getValue());
-            beansProducer.produce(SyntheticBeanBuildItem.configure(JsonObject.class)
-                    .scope(ApplicationScoped.class)
-                    .named(entry.getKey())
-                    .runtimeValue(recorder.createRoqDataJson(treeMapBean))
-                    .unremovable()
-                    .done());
-            beans.add("    - %s[name=%s]*".formatted(treeMapBean.getClass().getName(), entry.getKey()));
-
         }
 
         if (!beans.isEmpty() && config.logDataBeans()) {

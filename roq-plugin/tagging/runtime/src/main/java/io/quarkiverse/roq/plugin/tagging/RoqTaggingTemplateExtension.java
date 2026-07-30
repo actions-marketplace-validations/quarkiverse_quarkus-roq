@@ -3,20 +3,49 @@ package io.quarkiverse.roq.plugin.tagging;
 import static java.util.stream.Collectors.counting;
 import static java.util.stream.Collectors.groupingBy;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+import io.quarkiverse.roq.frontmatter.runtime.model.Page;
 import io.quarkiverse.roq.frontmatter.runtime.model.RoqCollection;
+import io.quarkiverse.roq.frontmatter.runtime.model.Site;
+import io.quarkiverse.roq.plugin.tagging.runtime.RoqTaggingConfig;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.impl.LazyValue;
 import io.quarkus.qute.TemplateExtension;
 
 @TemplateExtension
 public class RoqTaggingTemplateExtension {
 
+    private static final LazyValue<Boolean> LOWERCASE = new LazyValue<>(() -> {
+        var container = Arc.container();
+        if (container == null) {
+            throw new IllegalStateException("Arc container is not available");
+        }
+        var instance = container.instance(RoqTaggingConfig.class);
+        if (!instance.isAvailable()) {
+            throw new IllegalStateException("RoqTaggingConfig bean is not available");
+        }
+        return instance.get().lowercase();
+    });
+
+    private static boolean isLowercase() {
+        try {
+            return LOWERCASE.get();
+        } catch (IllegalStateException e) {
+            return false;
+        }
+    }
+
     /**
      * Returns a list of all tags from the given collection, with each tag slugified.
      */
     public static List<String> allTags(RoqCollection collection) {
+        boolean lowercase = isLowercase();
         return collection.stream()
-                .flatMap(documentPage -> RoqTaggingUtils.slugifiedTagStringsStream(documentPage.data()))
+                .flatMap(documentPage -> RoqTaggingUtils.slugifiedTagStringsStream(documentPage.data(), lowercase))
                 .toList();
     }
 
@@ -25,9 +54,10 @@ public class RoqTaggingTemplateExtension {
      * each tag appears. Each tag is slugified.
      */
     public static List<TagCount> tagsCount(RoqCollection collection) {
+        boolean lowercase = isLowercase();
         return collection
                 .stream()
-                .flatMap(documentPage -> RoqTaggingUtils.slugifiedTagStringsStream(documentPage.data()))
+                .flatMap(documentPage -> RoqTaggingUtils.slugifiedTagStringsStream(documentPage.data(), lowercase))
                 .collect(groupingBy(tag -> tag, counting())).entrySet()
                 .stream().map(entry -> new TagCount(entry.getKey(), entry.getValue()))
                 .toList();
@@ -40,6 +70,31 @@ public class RoqTaggingTemplateExtension {
      * @param count the count of the tag
      */
     public record TagCount(String name, Long count) {
+    }
+
+    /**
+     * Support for site.tags aggregation across all collections, allowing site.tags to be used in templates.
+     * Returns a Map<String, List<Page>> where keys are tag names (slugified)
+     * and values are lists of pages tagged with that tag.
+     *
+     * @param site the Roq site
+     * @return a map of tag names to lists of pages with that tag
+     */
+    public static Map<String, List<Page>> tags(Site site) {
+        if (site == null) {
+            return Map.of();
+        }
+
+        boolean lowercase = isLowercase();
+        Map<String, List<Page>> tagMap = new LinkedHashMap<>();
+
+        for (Page page : site.allPages()) {
+            for (String tag : RoqTaggingUtils.slugifiedTagStrings(page.data(), lowercase)) {
+                tagMap.computeIfAbsent(tag, k -> new ArrayList<>()).add(page);
+            }
+        }
+
+        return tagMap;
     }
 
 }

@@ -5,17 +5,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkiverse.roq.data.runtime.annotations.DataMapping;
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 
 public class DataMappingRequiredDataFileTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+    static final QuarkusExtensionTest unitTest = new QuarkusExtensionTest()
             .withApplicationRoot((jar) -> jar
                     .addClass(DataMappingRequiredDataFileTest.Person.class))
             .assertException(throwable -> {
                 Assertions.assertThat(throwable)
-                        .hasMessage("The @DataMapping#value(foo) is required, but there is no corresponding data file");
+                        .isInstanceOf(io.quarkiverse.roq.data.deployment.exception.DataMappingRequiredFileException.class)
+                        .hasMessageContaining("Required data file not found")
+                        .hasMessageContaining("@DataMapping(\"foo\") is marked as required");
             });
 
     @DataMapping(value = "foo", required = true)

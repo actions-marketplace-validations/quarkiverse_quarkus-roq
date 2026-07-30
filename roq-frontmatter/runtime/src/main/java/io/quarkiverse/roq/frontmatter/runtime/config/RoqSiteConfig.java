@@ -22,10 +22,14 @@ public interface RoqSiteConfig {
     String CONTENT_DIR = "content";
     String STATIC_DIR = "static";
     String PUBLIC_DIR = "public";
-    String IGNORED_FILES = "**.DS_Store,**Thumbs.db,**/_**,_**";
+    String IGNORED_FILES = "**/_**,_**";
+
+    String DEFAULT_PAGE_LINK = "/:path:ext";
+    String DEFAULT_COLLECTION_LINK = "/:collection/:slug/";
 
     List<ConfiguredCollection> DEFAULT_COLLECTIONS = List
-            .of(new ConfiguredCollection("posts", false, false, false, ":theme/post"));
+            .of(new ConfiguredCollection("posts", false, false, false, "post", DEFAULT_COLLECTION_LINK,
+                    Optional.empty()));
 
     /**
      * the base hostname & protocol for your site, e.g. http://example.com
@@ -45,7 +49,7 @@ public interface RoqSiteConfig {
 
     /**
      * Add new ignored files to the default list.
-     *
+     * <p>
      * The ignored files (relative to the site directory).
      *
      * <p>
@@ -57,13 +61,12 @@ public interface RoqSiteConfig {
     /**
      * The default ignored files (relative to the site directory) include:
      * <ul>
-     * <li><code>.DS_Store</code></li>
-     * <li><code>Thumbs.db</code></li>
      * <li>All files or directories starting with an underscore (<code>_</code>)</li>
      * </ul>
      *
      * <p>
-     * Only the <code>content/</code>, <code>public/</code>, and <code>static/</code> directories are scanned.
+     * These patterns are additional to the scanner's own OS-level defaults
+     * (e.g. <code>.DS_Store</code>, <code>Thumbs.db</code>, <code>*~</code>, <code>.class</code>).
      * </p>
      */
     @WithDefault(IGNORED_FILES)
@@ -90,10 +93,10 @@ public interface RoqSiteConfig {
     /**
      * The layout to use for normal html pages if not specified in FM.
      * When empty, the page will not use a layout when it doesn't specify it in FM.
-     *
-     * ":theme/" is removed if no theme is defined.
+     * <p>
+     * Resolves local layout first, then theme layout as fallback.
      */
-    @WithDefault(":theme/page")
+    @WithDefault("page")
     Optional<String> pageLayout();
 
     /**
@@ -138,8 +141,10 @@ public interface RoqSiteConfig {
     boolean future();
 
     /**
-     * This will be used to replace `:theme` when resolving layouts (e.g. `layout: :theme/main.html`)
+     * The theme name. Used to resolve theme layouts when using `theme-layout:` in front matter.
+     * With a theme, `layout: foo` resolves local first, then theme layout as fallback.
      */
+    @WithDefault("roq-base")
     Optional<String> theme();
 
     /**
@@ -149,9 +154,11 @@ public interface RoqSiteConfig {
     boolean draft();
 
     /**
-     * Directory under which all documents will be considered as drafts.
+     * Directory name used to mark collection documents as draft when frontmatter does not define attribute `draft`.
+     * Frontmatter `draft` takes precedence over this directory-based fallback.
      */
     @WithDefault("drafts")
+    @Pattern(regexp = DIR_NAME_PATTERN)
     String draftDirectory();
 
     /**
@@ -180,7 +187,7 @@ public interface RoqSiteConfig {
     /**
      * Indicates whether file names in the public directory and files attached to pages should be slugified
      * (converted to a URL-friendly format).
-     *
+     * <p>
      * When enabled, file names will automatically be transformed into a URL-safe format.
      * Additionally, `page.file` and `site.file` references can use the original file names,
      * as they will also be slugified during the process.
@@ -192,7 +199,7 @@ public interface RoqSiteConfig {
      * The directory names (in the Roq site directory) containing collections as key
      * and the corresponding collection config as value
      */
-    @ConfigDocDefault("posts=true")
+    @ConfigDocDefault("posts=true,posts.layout=post")
     @WithName("collections")
     Map<String, CollectionConfig> collectionsMap();
 
@@ -204,12 +211,22 @@ public interface RoqSiteConfig {
     String generatedTemplatesOutputDir();
 
     default List<ConfiguredCollection> collections() {
-        if (collectionsMap().isEmpty()) {
-            return DEFAULT_COLLECTIONS;
-        }
-        return collectionsMap().entrySet().stream().filter(e -> e.getValue().enabled())
-                .map(e -> new ConfiguredCollection(e.getKey(), false, e.getValue().hidden(), e.getValue().future(),
-                        e.getValue().layout().orElse(null)))
+        return java.util.stream.Stream.concat(
+                collectionsMap().entrySet().stream()
+                        .filter(e -> e.getValue().enabled())
+                        .map(e -> new ConfiguredCollection(
+                                e.getKey(),
+                                false,
+                                e.getValue().hidden(),
+                                e.getValue().future(),
+                                e.getValue().layout().orElse(null),
+                                e.getValue().link(),
+                                e.getValue().fromData()
+                                        .map(value -> new ConfiguredCollection.CollectionFromData(
+                                                value.idKey(),
+                                                value.name().orElse(e.getKey()))))),
+                DEFAULT_COLLECTIONS.stream()
+                        .filter(dc -> !collectionsMap().containsKey(dc.id())))
                 .toList();
     }
 
@@ -225,6 +242,14 @@ public interface RoqSiteConfig {
     default String pathPrefixOrEmpty() {
         return pathPrefix().orElse("");
     }
+
+    /**
+     * Default link template for non-collection pages.
+     * Can be overridden per-page using the frontmatter {@code link} key.
+     * Supports placeholders: {@code :path}, {@code :slug}, {@code :name}, {@code :ext}, etc.
+     */
+    @WithDefault(DEFAULT_PAGE_LINK)
+    String pageLink();
 
     interface CollectionConfig {
         /**
@@ -249,9 +274,36 @@ public interface RoqSiteConfig {
         /**
          * The layout to use if not specified in FM data.
          * When empty, the document will not use a layout when it doesn't specify it in FM.
-         *
-         * ":theme/" is removed if no theme defined.
+         * <p>
+         * Resolves local layout first, then theme layout as fallback.
          */
         Optional<String> layout();
+
+        /**
+         * Default link template for documents in this collection.
+         * Can be overridden per-page using the frontmatter {@code link} key.
+         * Supports placeholders: {@code :collection}, {@code :slug}, {@code :name}, {@code :ext}, etc.
+         */
+        @WithDefault(DEFAULT_COLLECTION_LINK)
+        String link();
+
+        /**
+         * If present, documents for this collection will be created for the data (array or dir) with the same name as the
+         * collection (using the collection default layout)
+         */
+        Optional<CollectionFromData> fromData();
+    }
+
+    interface CollectionFromData {
+
+        /**
+         * The data attribute to use as the page identifier. The value is slugified.
+         */
+        String idKey();
+
+        /**
+         * The name of the data source (file or directory in data/). Defaults to the collection id.
+         */
+        Optional<String> name();
     }
 }

@@ -1,9 +1,8 @@
 package io.quarkiverse.roq.plugin.faker.deployment;
 
-import static io.quarkiverse.roq.frontmatter.deployment.scan.RoqFrontmatterTemplateUtils.getIncludeFilter;
-import static io.quarkiverse.roq.frontmatter.deployment.scan.RoqFrontmatterTemplateUtils.normalizedLayout;
-import static io.quarkiverse.roq.util.PathUtils.slugify;
-import static io.quarkiverse.roq.util.PathUtils.toUnixPath;
+import static io.quarkiverse.roq.frontmatter.deployment.util.RoqFrontMatterLayoutUtils.getIncludeFilter;
+import static io.quarkiverse.tools.stringpaths.StringPaths.slugify;
+import static io.quarkiverse.tools.stringpaths.StringPaths.toUnixPath;
 
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -23,7 +22,8 @@ import com.github.javafaker.Book;
 import com.github.javafaker.Faker;
 
 import io.quarkiverse.roq.deployment.items.RoqProjectBuildItem;
-import io.quarkiverse.roq.frontmatter.deployment.scan.RoqFrontMatterRawTemplateBuildItem;
+import io.quarkiverse.roq.frontmatter.deployment.items.assemble.RoqFrontMatterRawPageBuildItem;
+import io.quarkiverse.roq.frontmatter.deployment.items.scan.RoqFrontMatterAvailableLayoutsBuildItem;
 import io.quarkiverse.roq.frontmatter.runtime.config.ConfiguredCollection;
 import io.quarkiverse.roq.frontmatter.runtime.config.RoqSiteConfig;
 import io.quarkiverse.roq.frontmatter.runtime.model.SourceFile;
@@ -46,11 +46,14 @@ public class RoqPluginFakerProcessor {
             "Contemporary", "Literary Fiction", "Short Stories", "Memoir",
             "Spirituality", "Education");
 
+    private static final int FAKER_IMAGE_COUNT = 10;
+
     public record Document(String title,
             String description,
             String author,
             ZonedDateTime date,
             List<String> tags,
+            String image,
             String content) {
 
         @Override
@@ -80,8 +83,9 @@ public class RoqPluginFakerProcessor {
         final ArrayList<String> t = new ArrayList<>(TAGS);
         Collections.shuffle(t);
         List<String> tags = t.subList(0, faker.number().numberBetween(1, 5));
+        String image = "faker/faker-" + faker.number().numberBetween(1, FAKER_IMAGE_COUNT + 1) + ".jpg";
         String content = generateContent();
-        return new Document(title, description, author, date, tags, content);
+        return new Document(title, description, author, date, tags, image, content);
     }
 
     private static String generateContent() {
@@ -99,7 +103,8 @@ public class RoqPluginFakerProcessor {
             FakerConfig fakerConfig,
             RoqProjectBuildItem roqProject,
             RoqSiteConfig siteConfig,
-            BuildProducer<RoqFrontMatterRawTemplateBuildItem> rawTemplatesProducer) {
+            RoqFrontMatterAvailableLayoutsBuildItem availableLayouts,
+            BuildProducer<RoqFrontMatterRawPageBuildItem> rawPagesProducer) {
         if (fakerConfig.count() == null || fakerConfig.count().isEmpty()) {
             return;
         }
@@ -117,15 +122,14 @@ public class RoqPluginFakerProcessor {
             for (Document document : FAKES) {
                 final String id = entry.getKey() + "/" + slugify(document.title(), false, false);
                 final String path = id + ".md";
-                final String layoutId = normalizedLayout(siteConfig.theme(),
-                        null,
-                        collection.layout());
-                rawTemplatesProducer.produce(new RoqFrontMatterRawTemplateBuildItem(
+                final String layoutId = availableLayouts.resolveCollectionLayoutId(siteConfig.theme(), collection);
+                rawPagesProducer.produce(new RoqFrontMatterRawPageBuildItem(
                         TemplateSource.create(
                                 id,
                                 "markdown",
                                 new SourceFile(
-                                        toUnixPath(roqProject.project().roqDir().normalize().toAbsolutePath().toString()),
+                                        toUnixPath(roqProject.local().roqDir().normalize().toAbsolutePath()
+                                                .toString()),
                                         path),
                                 path,
                                 id + ".html",
@@ -134,16 +138,17 @@ public class RoqPluginFakerProcessor {
                                 false,
                                 false),
                         layoutId,
-                        RoqFrontMatterRawTemplateBuildItem.TemplateType.DOCUMENT_PAGE,
                         new JsonObject()
                                 .put("title", document.title())
                                 .put("description", document.description())
                                 .put("author", document.author())
-                                .put("date", document.date().format(DateTimeFormatter.ofPattern(siteConfig.dateFormat())))
+                                .put("image", document.image())
+                                .put("date",
+                                        document.date()
+                                                .format(DateTimeFormatter.ofPattern(siteConfig.dateFormat())))
                                 .put("tags", new JsonArray(document.tags())),
                         collection,
-                        getIncludeFilter(layoutId).apply(document.content()),
-                        document.content(),
+                        getIncludeFilter(layoutId, true).apply(document.content()),
                         List.of()));
             }
         }

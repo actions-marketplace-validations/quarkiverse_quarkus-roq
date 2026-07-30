@@ -6,11 +6,11 @@
 import { html, render } from 'lit';
 import { Extension, Suggestion } from '../../../bundle.js';
 import './slash-menu.js';
-import {showPrompt} from "../../prompt-dialog.js";
-import {renderImageForm} from "./image.js";
+import {showImageDialog} from "../../image-dialog.js";
 
 // Define all available block types with their commands
-const BLOCK_TYPES = [
+// Image command needs special handling as it requires context from options
+const getBlockTypes = (options) => [
     {
         label: 'Text',
         icon: 'T',
@@ -76,46 +76,63 @@ const BLOCK_TYPES = [
     },
     {
         label: 'Image',
-        icon: '🏞️',
+        icon: '🖼️',
         command: ({ editor, range }) => {
-            showPrompt('Add an image:', { title: '', src: '', alt: ''}, renderImageForm).then(({ src, title, alt}) => {
+            const pagePath = options.getPagePath ? options.getPagePath() : '';
+
+            showImageDialog({ title: '', src: '', alt: '' }, pagePath).then(({ src, title, alt }) => {
                 if (src) {
                     editor.chain().focus().deleteRange(range).setParagraph().setImage({ src, title, alt }).run();
                 }
             });
-        }
-    },
-    {
-        label: 'Code Block',
-        icon: '{}',
-        command: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
-        }
-    },
-    {
-        label: 'Raw Block',
-        icon: '</>',
-        command: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).insertContent({ type: 'rawBlock' }).run();
-        }
-    },
-    {
-        label: 'Table',
-        icon: '▦',
-        command: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-        }
     }
+  },
+  {
+    label: 'Code Block',
+    icon: '{}',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
+    }
+  },
+  {
+    label: 'Raw Block',
+    icon: '</>',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertContent({ type: 'rawBlock' }).run();
+    }
+  },
+  {
+    label: 'Table',
+    icon: '▦',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    }
+  }
 ];
+
+const AI_COMMAND = {
+    label: 'AI',
+    icon: '✨',
+    description: 'Generate content with AI',
+    isAiCommand: true,
+    command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run();
+        editor.view.dom.dispatchEvent(new CustomEvent('generate-ai-content', {
+            bubbles: true, composed: true,
+            detail: { editor }
+        }));
+    }
+};
 
 /**
  * Create the SlashCommand extension
  */
 export const SlashCommand = Extension.create({
-    name: 'slashCommand',
+  name: 'slashCommand',
 
     addOptions() {
         return {
+            assistantIsAvailable: false,
             suggestion: {
                 char: '/',
                 startOfLine: true,
@@ -124,137 +141,126 @@ export const SlashCommand = Extension.create({
                 },
                 decorationContent: "Filter blocks..."
             },
+            getPagePath: () => '',
         };
     },
 
 
-    addCommands() {
-        return {
-            openSlashMenu:
-                (pos) =>
-                    ({editor, chain}) => {
-                        if (pos == null) {
-                            return false;
-                        }
-                        const $root = editor.$pos(pos);
+  addCommands() {
+    return {
+      openSlashMenu:
+        (pos) =>
+          ({ editor, chain }) => {
+            if (pos == null) {
+              console.warn('openSlashMenu: pos is null');
+              return false;
+            }
+            // Focus at the position, then insert / to trigger the slash command
+            chain().focus(pos).run();
+            const { $from } = editor.state.selection;
+            if ($from.parent.textContent.length > 0) {
+              return chain().splitBlock().insertContent('/').run();
+            }
+            return chain().insertContent('/').run();
+          },
 
-                        if ($root.node.type.name !== 'doc') return false
-
-                        const $from = $root.firstChild;
-                        if(!$from.node.isTextblock)  return false;
-                        console.log($from.textContent);
-                        const hasContent = $from.textContent?.length > 0;
-                        if(hasContent){
-                            return chain()
-                                .focus()
-                                .insertContentAt($from.to, [
-                                {
-                                    type: 'paragraph',
-                                    content: [
-                                        {
-                                            type: 'text',
-                                            text: '/',
-                                        },
-                                    ],
-                                }], { updateSelection:true })
-                                .run();
-                        }
-
-                        return chain()
-                            .focus()
-                            .insertContentAt($from.pos, '/', { updateSelection:true })
-                            .run()
-                    },
-
-        }
-    },
+    }
+  },
 
 
     addProseMirrorPlugins() {
+        const blockTypes = getBlockTypes(this.options);
+        const { assistantIsAvailable } = this.options;
+
         return [
             Suggestion({
                 editor: this.editor,
                 ...this.options.suggestion,
-                items: ({query}) => {
-                    return BLOCK_TYPES.filter(item =>
-                        item.label.toLowerCase().includes(query.toLowerCase())
+                items: ({ query }) => {
+                    const lowerQuery = query.toLowerCase();
+                    const items = blockTypes.filter(item =>
+                        item.label.toLowerCase().includes(lowerQuery)
                     );
+                    if (assistantIsAvailable && 'ai'.includes(lowerQuery)) {
+                        items.push(AI_COMMAND);
+                    }
+                    return items;
                 },
-                render: () => {
-                    let component;
-                    let popup;
+        render: () => {
+          let component;
+          let popup;
 
-                    const updatePosition = (clientRect) => {
-                        if (popup && clientRect) {
-                            const rect = clientRect();
-                            if (rect) {
-                                popup.style.left = `${rect.left}px`;
-                                popup.style.top = `${rect.bottom + 4}px`;
-                            }
-                        }
-                    };
+          const updatePosition = (clientRect) => {
+            if (popup && clientRect) {
+              const rect = clientRect();
+              if (rect) {
+                popup.style.left = `${rect.left}px`;
+                popup.style.top = `${rect.bottom + 4}px`;
+              }
+            }
+          };
 
-                    const renderPopup = (props) => {
-                        const template = html`
+          const renderPopup = (props) => {
+            const template = html`
                           <qwc-slash-menu
                             .items="${props.items}"
                             .query="${props.query}"
                             @item-selected="${(e) => {
-                              const item = e.detail.item;
-                              if (item && item.command) {
-                                props.command(item);
-                              }
-                            }}"
+                const item = e.detail.item;
+                if (item && item.command) {
+                  props.command(item);
+                }
+              }}"
                           ></qwc-slash-menu>
                         `;
-                        render(template, popup);
-                        component = popup.querySelector('qwc-slash-menu');
-                    };
+            render(template, popup);
+            component = popup.querySelector('qwc-slash-menu');
+          };
 
-                    return {
-                        onStart: (props) => {
-                            // Create popup container
-                            popup = document.createElement('div');
-                            popup.style.position = 'absolute';
-                            popup.style.zIndex = '1000';
-                            document.body.appendChild(popup);
+          return {
+            onStart: (props) => {
+              // Create popup container
+              popup = document.createElement('div');
+              popup.style.position = 'absolute';
+              popup.style.zIndex = '1000';
+              document.body.appendChild(popup);
 
-                            // Render the slash menu using Lit template
-                            renderPopup(props);
-                            updatePosition(props.clientRect);
-                        },
+              // Render the slash menu using Lit template
+              renderPopup(props);
+              updatePosition(props.clientRect);
+            },
 
-                        onUpdate: (props) => {
-                            renderPopup(props);
-                            updatePosition(props.clientRect);
-                        },
+            onUpdate: (props) => {
+              renderPopup(props);
+              updatePosition(props.clientRect);
+            },
 
-                        onKeyDown: (props) => {
-                            if (props.event.key === 'Escape') {
-                                if (popup) {
-                                    popup.remove();
-                                    popup = null;
-                                }
-                                return true;
-                            }
+            onKeyDown: (props) => {
+              if (props.event.key === 'Escape') {
+                if (popup) {
+                  popup.remove();
+                  popup = null;
+                }
+                return true;
+              }
 
-                            if (component) {
-                                return component.onKeyDown(props.event);
-                            }
+              if (component) {
+                return component.onKeyDown(props.event);
+              }
 
-                            return false;
-                        },
+              return false;
+            },
 
-                        onExit: () => {
-                            if (popup) {
-                                popup.remove();
-                                popup = null;
-                            }
-                            component = null;
-                        },
-                    };
-                },
-            }),
-        ];
-    },
+            onExit: () => {
+              if (popup) {
+                popup.remove();
+                popup = null;
+              }
+              component = null;
+            },
+          };
+        },
+      }),
+    ];
+  },
 });

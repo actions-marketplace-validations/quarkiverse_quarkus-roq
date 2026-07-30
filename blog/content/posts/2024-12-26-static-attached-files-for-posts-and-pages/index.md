@@ -1,10 +1,10 @@
 ---
 title: Static attached files for posts and pages
-image: dina-badamshina-j7vbBmTHmjY-unsplash.jpg
+image: dina-badamshina-j7vbBmTHmjY-unsplash.webp
 description: |
   This Christmas, I’m Roq-ing a cool new feature (inspired by Hugo 😅): it is possible to attach static files to posts and pages. They will be served relative to the page. 🎁🤩
 author: ia3andy
-tags: frontmatter, cool-stuff
+tags: cool-stuff, new-feature
 ---
 
 This Christmas, I’m Roq-ing a cool new feature (inspired by Hugo 😅): it is possible to attach static files to posts and pages. They will be served relative to the page. 🎁🤩
@@ -16,4 +16,4 @@ For example here is a sample pdf: [link](sample.pdf).
 
 **Fun fact:** [@parisjug](https://www.parisjug.org/) is already using this feature on their site (which is on Hugo 🤪)!
 
-The doc for this feature is [here](https://iamroq.com/docs/basics/#page-files).
+The doc for this feature is [here](https://iamroq.dev/docs/basics/#page-files).

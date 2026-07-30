@@ -1,10 +1,13 @@
 {
-  "catalogs": {},
   "aliases": {
     "roq": {
-      "description": "Serve the generated static website locally",
-      "script-ref": "roq.java"
+      "script-ref": "io.quarkiverse.roq:quarkus-roq-cli:2.1.6:runner@fatjar",
+      "description": "Roq CLI - static site generator",
+      "java": "21+",
+      "runtime-options": [
+        "--add-opens",
+        "java.base/java.lang=ALL-UNNAMED"
+      ]
     }
-  },
-  "templates": {}
+  }
 }

@@ -1,18 +1,24 @@
 package io.quarkiverse.roq.frontmatter.runtime;
 
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import io.quarkiverse.roq.frontmatter.runtime.model.*;
-import io.quarkiverse.roq.util.PathUtils;
+import io.quarkiverse.roq.frontmatter.runtime.utils.TemplateLink;
+import io.quarkiverse.tools.stringpaths.StringPaths;
 import io.quarkus.qute.TemplateExtension;
+import io.quarkus.qute.TemplateExtension.TemplateAttribute;
+import io.quarkus.qute.TemplateInstance;
 import io.vertx.core.http.impl.MimeMapping;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -24,6 +30,13 @@ public class RoqTemplateExtension {
 
     private static final Pattern COUNT_WORDS = Pattern.compile("\\b\\w+\\b");
     private static final Pattern STRIP_HTML_PATTERN = Pattern.compile("<[^>]*>");
+    private static final Pattern BR_PATTERN = Pattern.compile("(?i)<br\\s*/?>");
+    private static final Pattern BLOCK_CLOSE_PATTERN = Pattern
+            .compile("(?i)</(p|h[1-6]|div|blockquote|ul|ol|table)\\s*>");
+    private static final Pattern LI_CLOSE_PATTERN = Pattern.compile("(?i)</li\\s*>");
+    private static final Pattern SPACES_PATTERN = Pattern.compile("[ \\t]+");
+    private static final Pattern TRAILING_SPACES_PATTERN = Pattern.compile(" *\\n");
+    private static final Pattern MULTI_NEWLINES_PATTERN = Pattern.compile("\\n{3,}");
 
     /**
      * Returns the number of words in the given text.<br>
@@ -76,6 +89,47 @@ public class RoqTemplateExtension {
         return wordLimit(stripHtml(htmlContent), limit);
     }
 
+    // ── Page link placeholder extensions ──────────────────────────────────
+
+    /**
+     * Returns the lowercased slug for this page (matches the {@code :slug} link placeholder).<br>
+     * Resolved from FM {@code slug} key, then {@code title}, then the source file name.<br>
+     * Example: "{page.slug}" → "my-post-title".
+     */
+    public static String slug(Page page) {
+        return TemplateLink.resolveSlug(page.source(), page.data()).toLowerCase();
+    }
+
+    /**
+     * Returns the case-preserving slug for this page (matches the {@code :Slug} link placeholder).<br>
+     * Resolved from FM {@code slug} key, then {@code title}, then the source file name.<br>
+     * Example: "{page.Slug}" → "My-Post-Title".
+     */
+    @TemplateExtension(matchName = "Slug")
+    public static String slugCasePreserving(Page page) {
+        return TemplateLink.resolveSlug(page.source(), page.data());
+    }
+
+    /**
+     * Returns the lowercased name for this page (matches the {@code :name} link placeholder).<br>
+     * This is the slugified source file name (with date prefix removed).<br>
+     * Example: "{page.name}" → "my-post".
+     */
+    @TemplateExtension(matchName = "name")
+    public static String pageName(Page page) {
+        return TemplateLink.resolveName(page.source()).toLowerCase();
+    }
+
+    /**
+     * Returns the case-preserving name for this page (matches the {@code :Name} link placeholder).<br>
+     * This is the slugified source file name (with date prefix removed).<br>
+     * Example: "{page.Name}" → "My-Post".
+     */
+    @TemplateExtension(matchName = "Name")
+    public static String pageNameCasePreserving(Page page) {
+        return TemplateLink.resolveName(page.source());
+    }
+
     /**
      * Returns the text part of this string by stripping all html tags.<br>
      * Example: "{'<div>Hello World</div>'.stripHtml}" → "Hello World".
@@ -85,6 +139,39 @@ public class RoqTemplateExtension {
             return null;
         }
         return STRIP_HTML_PATTERN.matcher(html).replaceAll("");
+    }
+
+    /**
+     * Returns the text part of this string by stripping all html tags.<br>
+     * When {@code preserveParagraphs} is true, block-level HTML elements are converted to line breaks
+     * and HTML entities are decoded, producing readable plain text with paragraph structure.<br>
+     * Example: "{'
+     * <p>
+     * Hello
+     * </p>
+     * <p>
+     * World
+     * </p>
+     * '.stripHtml(true)}" → "Hello\n\nWorld".
+     */
+    public static String stripHtml(String html, boolean preserveParagraphs) {
+        if (!preserveParagraphs) {
+            return stripHtml(html);
+        }
+        if (html == null || html.isEmpty()) {
+            return "";
+        }
+        String text = html;
+        text = BR_PATTERN.matcher(text).replaceAll("\n");
+        text = BLOCK_CLOSE_PATTERN.matcher(text).replaceAll("\n\n");
+        text = LI_CLOSE_PATTERN.matcher(text).replaceAll("\n");
+        text = STRIP_HTML_PATTERN.matcher(text).replaceAll("");
+        text = text.replace("&amp;", "&").replace("&quot;", "\"")
+                .replace("&#39;", "'").replace("&nbsp;", " ");
+        text = SPACES_PATTERN.matcher(text).replaceAll(" ");
+        text = TRAILING_SPACES_PATTERN.matcher(text).replaceAll("\n");
+        text = MULTI_NEWLINES_PATTERN.matcher(text).replaceAll("\n\n");
+        return text.strip();
     }
 
     /**
@@ -112,11 +199,48 @@ public class RoqTemplateExtension {
     }
 
     /**
-     * Returns the slugified version of the given text.<br>
+     * Returns the slugified version of the given text.
      * Example: "{'Hello World'.slugify}" → "Hello-World".
      */
     public static String slugify(String text) {
-        return PathUtils.slugify(text, false, false);
+        return StringPaths.slugify(text, false, false);
+    }
+
+    /**
+     * Returns the slugified version of the given text with optional case and path control,
+     * matching the underlying {@code StringPaths.slugify} behaviour.
+     * <ul>
+     * <li>{@code slugify(false)} — case-preserving (default), slashes replaced with hyphens</li>
+     * <li>{@code slugify(true)} — lowercased, slashes replaced with hyphens (matches URL generation)</li>
+     * </ul>
+     * Example: "{'Hello World'.slugify(true)}" → "hello-world".
+     *
+     * @param text the text to slugify
+     * @param lowerCase when {@code true}, the result is lowercased
+     * @return the slugified text
+     */
+    public static String slugify(String text, boolean lowerCase) {
+        String result = StringPaths.slugify(text, false, false);
+        return lowerCase ? result.toLowerCase() : result;
+    }
+
+    /**
+     * Returns the slugified version of the given text with full control over case and path separators,
+     * matching the underlying {@code StringPaths.slugify} behaviour.
+     * <ul>
+     * <li>{@code slugify(true, false)} — lowercased, slashes replaced with hyphens (matches URL generation)</li>
+     * <li>{@code slugify(false, true)} — case-preserving, slashes preserved (for path-like segments)</li>
+     * </ul>
+     * Example: "{'Hello/World'.slugify(true, true)}" → "hello/world".
+     *
+     * @param text the text to slugify
+     * @param lowerCase when {@code true}, the result is lowercased
+     * @param preservePath when {@code true}, slashes ({@code /}) are preserved instead of replaced with hyphens
+     * @return the slugified text
+     */
+    public static String slugify(String text, boolean lowerCase, boolean preservePath) {
+        String result = StringPaths.slugify(text, preservePath, false);
+        return lowerCase ? result.toLowerCase() : result;
     }
 
     /**
@@ -169,6 +293,22 @@ public class RoqTemplateExtension {
     }
 
     /**
+     * Returns the first N documents from the list as featured items.
+     * Example: "{posts.featured(2)}".
+     */
+    public static List<DocumentPage> featured(List<DocumentPage> list, int count) {
+        return list.subList(0, Math.min(count, list.size()));
+    }
+
+    /**
+     * Returns all documents after the first N.
+     * Example: "{posts.rest(2)}".
+     */
+    public static List<DocumentPage> rest(List<DocumentPage> list, int count) {
+        return count >= list.size() ? List.of() : list.subList(count, list.size());
+    }
+
+    /**
      * Returns a new list with the elements of the given list in random order.
      */
     public static <T> List<T> randomise(List<T> l) {
@@ -190,14 +330,14 @@ public class RoqTemplateExtension {
      * This only works when future is enabled on the collection.
      */
     public static List<DocumentPage> future(List<DocumentPage> list) {
-        return list.stream().filter(d -> d.date().isAfter(ZonedDateTime.now())).toList();
+        return list.stream().filter(d -> d.date() != null && d.date().isAfter(ZonedDateTime.now())).toList();
     }
 
     /**
      * Returns a new list containing only the documents dated in the past.
      */
     public static List<DocumentPage> past(List<DocumentPage> list) {
-        return list.stream().filter(d -> d.date().isBefore(ZonedDateTime.now())).toList();
+        return list.stream().filter(d -> d.date() != null && d.date().isBefore(ZonedDateTime.now())).toList();
     }
 
     /**
@@ -219,11 +359,129 @@ public class RoqTemplateExtension {
      * Example: {@code list.sortByDate(true)} → sorts by date in descending order.
      */
     public static List<DocumentPage> sortByDate(List<DocumentPage> list, boolean reverse) {
-        Comparator<DocumentPage> comparing = Comparator.comparing(Page::date);
+        Comparator<DocumentPage> comparing = Comparator.comparing(Page::date, Comparator.nullsLast(Comparator.naturalOrder()));
         if (reverse) {
             comparing = comparing.reversed();
         }
         return list.stream().sorted(comparing).toList();
+    }
+
+    // ── Date formatting ──────────────────────────────────────────────────
+
+    private static final DateTimeFormatter RFC_822 = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z",
+            Locale.ENGLISH);
+
+    /**
+     * Returns the ISO 8601 date-time string (e.g. "2024-03-15T10:30:00+01:00").<br>
+     * Example: "{page.date.iso}".
+     */
+    public static String iso(ZonedDateTime date) {
+        return date.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+    }
+
+    /**
+     * Returns the ISO 8601 date string (e.g. "2024-03-15").<br>
+     * Example: "{page.date.isoDate}".
+     */
+    public static String isoDate(ZonedDateTime date) {
+        return date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+    }
+
+    /**
+     * Returns a formatted date string. Accepts either a {@link FormatStyle} name (short, medium, long, full)
+     * for locale-aware formatting, or a custom pattern (e.g. "yyyy-MM-dd"). When {@code null},
+     * defaults to "medium".<br>
+     * Examples: "{page.date.style('long')}", "{page.date.style('yyyy, MMM dd')}".
+     */
+    @TemplateExtension(matchName = "style")
+    public static String dateStyle(ZonedDateTime date, String styleOrFormat,
+            @TemplateAttribute(TemplateInstance.LOCALE) Object locale) {
+        Locale loc = resolveLocale(locale);
+        String style = styleOrFormat == null || styleOrFormat.isEmpty() ? "medium" : styleOrFormat;
+        return switch (style.toLowerCase()) {
+            case "short" -> date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(loc));
+            case "medium" -> date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(loc));
+            case "long" -> date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(loc));
+            case "full" -> date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(loc));
+            default -> date.format(DateTimeFormatter.ofPattern(style, loc));
+        };
+    }
+
+    /**
+     * Returns a short date string (e.g. "Mar 15, 2024"), locale-aware.<br>
+     * Example: "{page.date.shortDate}".
+     */
+    public static String shortDate(ZonedDateTime date,
+            @TemplateAttribute(TemplateInstance.LOCALE) Object locale) {
+        return date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(resolveLocale(locale)));
+    }
+
+    /**
+     * Returns a long date string (e.g. "March 15, 2024"), locale-aware.<br>
+     * Example: "{page.date.longDate}".
+     */
+    public static String longDate(ZonedDateTime date,
+            @TemplateAttribute(TemplateInstance.LOCALE) Object locale) {
+        return date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(resolveLocale(locale)));
+    }
+
+    /**
+     * Returns a short time string (e.g. "10:30 AM"), locale-aware.<br>
+     * Example: "{page.date.shortTime}".
+     */
+    public static String shortTime(ZonedDateTime date,
+            @TemplateAttribute(TemplateInstance.LOCALE) Object locale) {
+        return date.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(resolveLocale(locale)));
+    }
+
+    /**
+     * Returns a long time string (e.g. "10:30:00 AM CET"), locale-aware.<br>
+     * Example: "{page.date.longTime}".
+     */
+    public static String longTime(ZonedDateTime date,
+            @TemplateAttribute(TemplateInstance.LOCALE) Object locale) {
+        return date.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.LONG).withLocale(resolveLocale(locale)));
+    }
+
+    /**
+     * Returns a short date-time string (e.g. "Mar 15, 2024, 10:30 AM"), locale-aware.<br>
+     * Example: "{page.date.short}".
+     */
+    @TemplateExtension(matchName = "short")
+    public static String shortDateTime(ZonedDateTime date,
+            @TemplateAttribute(TemplateInstance.LOCALE) Object locale) {
+        return date.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+                .withLocale(resolveLocale(locale)));
+    }
+
+    /**
+     * Returns a long date-time string (e.g. "March 15, 2024, 10:30:00 AM CET"), locale-aware.<br>
+     * Example: "{page.date.long}".
+     */
+    @TemplateExtension(matchName = "long")
+    public static String longDateTime(ZonedDateTime date,
+            @TemplateAttribute(TemplateInstance.LOCALE) Object locale) {
+        return date.format(
+                DateTimeFormatter.ofLocalizedDateTime(FormatStyle.LONG).withLocale(resolveLocale(locale)));
+    }
+
+    /**
+     * Returns an RFC 822 date-time string (e.g. "Fri, 15 Mar 2024 10:30:00 +0100"),
+     * always in English as required by the RFC spec. Used for RSS feeds.<br>
+     * Example: "{page.date.rfc822}".
+     */
+    public static String rfc822(ZonedDateTime date) {
+        return date.format(RFC_822);
+    }
+
+    private static Locale resolveLocale(Object locale) {
+        if (locale instanceof Locale l) {
+            return l;
+        }
+        if (locale instanceof String s && !s.isEmpty()) {
+            return Locale.forLanguageTag(s);
+        }
+        return Locale.getDefault();
     }
 
     private static long ceilDiv(long x, long y) {

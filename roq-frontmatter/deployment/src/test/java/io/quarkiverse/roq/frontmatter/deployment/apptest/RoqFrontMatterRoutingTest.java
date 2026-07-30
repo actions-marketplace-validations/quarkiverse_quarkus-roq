@@ -1,0 +1,139 @@
+package io.quarkiverse.roq.frontmatter.deployment.apptest;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+import io.quarkus.test.QuarkusExtensionTest;
+import io.restassured.RestAssured;
+
+/**
+ * Site: {@code routing-site} (resource)
+ * <p>
+ * Config: path-prefix=/bar, root-path=/foo
+ * <p>
+ * Features tested: URL routing with path prefix and root-path, HTML posts,
+ * pages, index listing, directory pages/posts with attached files, static
+ * file serving, date-based filenames.
+ */
+@DisplayName("Roq FrontMatter - URL routing and path prefix")
+public class RoqFrontMatterRoutingTest {
+
+    @RegisterExtension
+    static final QuarkusExtensionTest unitTest = new QuarkusExtensionTest()
+            .withApplicationRoot((jar) -> jar
+                    .addAsResource("application.properties")
+                    .addAsResource("routing-site"));
+
+    @Test
+    @DisplayName("HTML post renders with correct title, base href, and content")
+    public void testHtmlPost() {
+        RestAssured.when().get("/bar/posts/awesome-post-1").then().statusCode(200).log().ifValidationFails()
+                .body("html.head.title", equalTo("My Cool Post"))
+                .body("html.head.base.@href", equalTo("/foo/"))
+                .body("html.head.meta.findAll { it.@name == 'twitter:url' }.@content",
+                        equalTo("https://mywebsite.com/foo/bar/"))
+                .body("html.body.article.h1", equalTo("A cool blog post"))
+                .body("html.body.article.p", equalTo("bar hello"))
+                .body("html.body.div.h2", equalTo("My Cool Post"))
+                .body("html.body.div.p", equalTo("bar bar bar"));
+    }
+
+    @Test
+    @DisplayName("Directory page renders with attached file served")
+    public void testDirPage() {
+        RestAssured.when().get("/bar/my-dir-page").then().statusCode(200).log().ifValidationFails()
+                .body("html.head.title", equalTo("My dir page"))
+                .body("html.head.base.@href", equalTo("/foo/"))
+                .body("html.head.meta.findAll { it.@name == 'twitter:url' }.@content",
+                        equalTo("https://mywebsite.com/foo/bar/"))
+                .body("html.body.article.h1", equalTo("Hello!"));
+        RestAssured.when().get("/bar/my-dir-page/beer.doc").then().statusCode(200);
+    }
+
+    @Test
+    @DisplayName("Directory post renders with attached file served")
+    public void testDirPost() {
+        RestAssured.when().get("/bar/posts/dir-post").then().statusCode(200).log().ifValidationFails()
+                .body("html.head.title", equalTo("posts/2024-03-10-dir-post/index.html"))
+                .body("html.head.base.@href", equalTo("/foo/"))
+                .body("html.body.article.h1", equalTo("Hello!"));
+        RestAssured.when().get("/bar/posts/dir-post/beer.svg").then().statusCode(200);
+    }
+
+    @Test
+    @DisplayName("Static image is served under path prefix")
+    public void testStatic() {
+        RestAssured.when().get("/bar/images/iamroq.png").then().statusCode(200).log().ifValidationFails();
+    }
+
+    @Test
+    @DisplayName("Page renders with correct title, content, and layout data")
+    public void testPage() {
+        RestAssured.when().get("/bar/my-cool-page").then().statusCode(200).log().ifValidationFails()
+                .body("html.head.title", equalTo("My Cool Page"))
+                .body("html.body.article.h1", equalTo("Hello World"))
+                .body("html.body.article.p", equalTo("bar"))
+                .body("html.body.div.h2", equalTo("My Cool Page"))
+                .body("html.body.div.p", equalTo("bar bar bar"));
+    }
+
+    @Test
+    @DisplayName("Index page lists posts and renders layout data")
+    public void testIndex() {
+        RestAssured.when().get("/bar").then().statusCode(200).log().ifValidationFails()
+                .body("html.head.title", equalTo("Hello, world! I'm Roq"))
+                .body("html.body.div.h1[0]", containsString("posts/date-in-frontmatter-post.html"))
+                .body("html.body.div.h1[1]", containsString("posts/awesome-post.html"))
+                .body("html.body.div.h1[2]", containsString("posts/2024-03-10-dir-post/index.html"))
+                .body("html.body.div.h1[3]", containsString("posts/2020-10-24-old-post.html"))
+                .body("html.body.div.h2", equalTo("Hello, world! I'm Roq"))
+                .body("html.body.div.p", equalTo("bar bar bar"));
+    }
+
+    @Test
+    @DisplayName("Date-based filename extracts publish date correctly")
+    public void testDateFileName() {
+        RestAssured.when().get("/bar/posts/old-post").then().statusCode(200).log().ifValidationFails()
+                .body("html.body.article.span", equalTo("2020-10-24T00:00Z[UTC]"));
+    }
+
+    @Test
+    public void testDateInFrontmatter() {
+        RestAssured.when().get("/bar/posts/dated-post").then().statusCode(200).log().ifValidationFails()
+                .body("html.body.article.span", equalTo("2024-10-11T00:00Z[UTC]"));
+    }
+
+    // --- Frontmatter slug override ---
+
+    @Test
+    @DisplayName("Collection document with frontmatter slug is served at slug URL")
+    public void testCollectionDocSlugOverride() {
+        RestAssured.when().get("/bar/posts/awesome-post-1").then().statusCode(200).log().ifValidationFails();
+    }
+
+    @Test
+    @DisplayName("Collection document with frontmatter slug is NOT served at filename URL")
+    public void testCollectionDocFilenameNotUsedWhenSlugOverridden() {
+        RestAssured.when().get("/bar/posts/awesome-post").then().statusCode(404);
+    }
+
+    @Disabled("See https://github.com/quarkiverse/quarkus-roq/issues/1009")
+    @Test
+    @DisplayName("Normal page with frontmatter slug is served at slug URL, not filename URL")
+    public void testNormalPageSlugOverride() {
+        RestAssured.when().get("/bar/pages/custom-slug").then().statusCode(200).log().ifValidationFails();
+    }
+
+    @Disabled("See https://github.com/quarkiverse/quarkus-roq/issues/1009")
+    @Test
+    @DisplayName("Normal page with frontmatter slug is NOT served at original filename URL")
+    public void testNormalPageFilenameNotUsedWhenSlugOverridden() {
+        RestAssured.when().get("/bar/pages/original-name").then().statusCode(404);
+    }
+
+}
