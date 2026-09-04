@@ -112,31 +112,91 @@ class RoqUrlTest {
     }
 
     @Test
-    void testNavReturnsActiveForMatchingPath() {
-        RoqUrl url = new RoqUrl(testRoot(), "/docs/getting-started");
-        assertEquals("active", url.nav("/blog/docs/getting-started"));
-        assertEquals("", url.nav("/blog/docs"));
-    }
-
-    @Test
-    void testNavReturnsEmptyForNonMatchingPath() {
-        RoqUrl url = new RoqUrl(testRoot(), "/docs/getting-started");
-        assertEquals("", url.nav("/blog/posts"));
-        assertEquals("", url.nav("/blog/about"));
-    }
-
-    @Test
-    void testNavWithMultiplePaths() {
+    void testIsActiveWithMultiplePaths() {
         RoqUrl urlOnDocs = new RoqUrl(testRoot(), "/docs/advanced");
-        assertEquals("active", urlOnDocs.nav("/blog/posts", "/blog/docs/advanced", "/blog/about"));
-        assertEquals("", urlOnDocs.nav("/blog/posts", "/blog/about"));
+        assertTrue(urlOnDocs.isActive("/blog/posts", "/blog/docs/advanced", "/blog/about"));
+        assertFalse(urlOnDocs.isActive("/blog/posts", "/blog/about"));
     }
 
     @Test
-    void testNavRootPage() {
-        RoqUrl url = new RoqUrl(testRoot(), "/");
-        assertEquals("active", url.nav("/blog"));
-        assertEquals("", url.nav("/blog/docs"));
+    void testIsActiveWithNullPaths() {
+        RoqUrl url = new RoqUrl(testRoot(), "/docs/advanced");
+        assertFalse(url.isActive(null));
+        assertFalse(url.isActive(null, (String) null));
+        assertTrue(url.isActive(null, "/blog/docs/advanced"));
+    }
+
+    @Test
+    void testParentPathMultiSegment() {
+        assertEquals("/guides/", RoqUrl.parentPath("/guides/my-doc"));
+    }
+
+    @Test
+    void testParentPathDeepPath() {
+        assertEquals("/version/main/guides/", RoqUrl.parentPath("/version/main/guides/security"));
+    }
+
+    @Test
+    void testParentPathTrailingSlash() {
+        assertEquals("/blog/", RoqUrl.parentPath("/blog/my-post/"));
+    }
+
+    @Test
+    void testParentPathSingleSegment() {
+        assertEquals("/", RoqUrl.parentPath("/my-doc"));
+    }
+
+    @Test
+    void testParentPathRoot() {
+        assertNull(RoqUrl.parentPath("/"));
+    }
+
+    @Test
+    void testParentPathNull() {
+        assertNull(RoqUrl.parentPath(null));
+    }
+
+    @Test
+    void testParentPathEmpty() {
+        assertNull(RoqUrl.parentPath(""));
+    }
+
+    // The Asciidoc converter feeds parentPath() the value of page.url().absolute(), which is a
+    // full URL (scheme + host + path), not a root-relative path. These cases cover that contract.
+
+    @Test
+    void testParentPathFullUrl() {
+        assertEquals("/guides/", RoqUrl.parentPath("https://quarkus.io/guides/init-tasks/"));
+    }
+
+    @Test
+    void testParentPathFullUrlNoTrailingSlash() {
+        assertEquals("/guides/", RoqUrl.parentPath("https://quarkus.io/guides/security"));
+    }
+
+    @Test
+    void testParentPathFullUrlHttpScheme() {
+        assertEquals("/blog/", RoqUrl.parentPath("http://example.com/blog/my-post/"));
+    }
+
+    @Test
+    void testParentPathFullUrlDeepPath() {
+        assertEquals("/version/main/guides/", RoqUrl.parentPath("https://example.com/version/main/guides/security"));
+    }
+
+    @Test
+    void testParentPathFullUrlSingleSegment() {
+        assertEquals("/", RoqUrl.parentPath("https://example.com/my-doc"));
+    }
+
+    @Test
+    void testParentPathFullUrlSiteRoot() {
+        assertNull(RoqUrl.parentPath("https://example.com/"));
+    }
+
+    @Test
+    void testParentPathFullUrlNoPath() {
+        assertNull(RoqUrl.parentPath("https://example.com"));
     }
 
     @Test

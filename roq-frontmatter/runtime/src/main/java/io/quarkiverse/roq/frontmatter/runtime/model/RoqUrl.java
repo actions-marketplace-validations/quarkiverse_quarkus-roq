@@ -116,6 +116,15 @@ public record RoqUrl(
     }
 
     /**
+     * Checks if this is an absolute path (starting with /)
+     *
+     * @return true if the path starts with a slash
+     */
+    public static boolean isAbsolute(String path) {
+        return path.startsWith("/");
+    }
+
+    /**
      * Create a new Url joining the other path.
      * Whatever if the path starts with `/`, it will always join.
      *
@@ -137,6 +146,21 @@ public record RoqUrl(
      */
     public RoqUrl join(Object other) {
         return this.resolve(other);
+    }
+
+    /**
+     * Resolve a page attachment against this url. When the url targets an html file
+     * (e.g. `/posts/my-post.html` produced by a `:ext!` link), the extension is removed
+     * so attachments resolve under the page directory (e.g. `/posts/my-post/img.png`).
+     *
+     * @param name the attachment file name or relative path
+     * @return the attachment url
+     */
+    public RoqUrl resolveAttachment(Object name) {
+        if (!isExternal() && resourcePath().endsWith(".html")) {
+            return new RoqUrl(root(), StringPaths.removeExtension(resourcePath())).resolve(name);
+        }
+        return resolve(name);
     }
 
     /**
@@ -218,30 +242,22 @@ public record RoqUrl(
     }
 
     /**
-     * Check if this url path matches the given path exactly (ignoring trailing slash).
+     * Check if this url path matches one of the given paths exactly (ignoring trailing slash).
      *
      * @param path the path to check against (including root path if configured)
+     * @param paths additional paths to check against
      */
-    public boolean isActive(String path) {
-        return normalize(path()).equals(normalize(path));
-    }
-
-    /**
-     * Returns "active" if this url matches one of the given paths, an empty string otherwise.
-     *
-     * @param paths the paths to check against (including root path if configured)
-     */
-    public String nav(String... paths) {
-        for (String path : paths) {
-            if (isActive(path)) {
-                return "active";
+    public boolean isActive(String path, String... paths) {
+        final String current = StringPaths.removeTrailingSlash(path());
+        if (path != null && current.equals(StringPaths.removeTrailingSlash(path))) {
+            return true;
+        }
+        for (String p : paths) {
+            if (p != null && current.equals(StringPaths.removeTrailingSlash(p))) {
+                return true;
             }
         }
-        return "";
-    }
-
-    private static String normalize(String path) {
-        return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+        return false;
     }
 
     /**
@@ -253,6 +269,53 @@ public record RoqUrl(
     public RoqUrl removeFirst(String str) {
         String newPath = resourcePath().replaceFirst(java.util.regex.Pattern.quote(str), "");
         return new RoqUrl(root(), newPath);
+    }
+
+    /**
+     * Extracts the collection base path from a page URL to use as relfileprefix.
+     * The input may be a root-relative path or a full URL (scheme + host + path); the latter is
+     * what {@code page.url().absolute()} produces, which is what the Asciidoc converter passes in.
+     * Examples:
+     * - /guides/my-doc → /guides/
+     * - /version/main/guides/security → /version/main/guides/
+     * - /blog/my-post/ → /blog/
+     * - https://quarkus.io/guides/my-doc → /guides/
+     * - https://example.com/version/main/guides/security → /version/main/guides/
+     *
+     * @param pageUrl the page URL, either root-relative or a full URL
+     * @return the collection base path with trailing slash, or null if cannot be determined
+     */
+    public static String parentPath(String pageUrl) {
+        if (pageUrl == null || pageUrl.isEmpty() || pageUrl.equals("/")) {
+            return null;
+        }
+
+        // When given a full URL (e.g. https://quarkus.io/guides/my-doc), drop the scheme and
+        // authority so we work on the path only; otherwise the host would leak into the prefix.
+        // URI.create() is safe here because pageUrl originates from page.url().absolute(), which
+        // has already been validated; it throws IllegalArgumentException on a malformed URI.
+        if (isFullPath(pageUrl)) {
+            String uriPath = URI.create(pageUrl).getPath();
+            if (uriPath == null || uriPath.isEmpty() || uriPath.equals("/")) {
+                return null;
+            }
+            pageUrl = uriPath;
+        }
+
+        String path = isAbsolute(pageUrl) ? pageUrl.substring(1) : pageUrl;
+
+        if (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+
+        int lastSlash = path.lastIndexOf('/');
+        if (lastSlash == -1) {
+            // No slash means single-level like /my-doc, return / as base
+            return "/";
+        }
+
+        // Return everything up to and including the last slash before the page name
+        return "/" + path.substring(0, lastSlash + 1);
     }
 
 }

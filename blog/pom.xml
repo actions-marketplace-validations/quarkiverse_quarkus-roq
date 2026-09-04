@@ -6,7 +6,7 @@
     <version>999-SNAPSHOT</version>
     <name>Quarkus Roq - Blog</name>
     <properties>
-        <compiler-plugin.version>3.15.0</compiler-plugin.version>
+        <compiler-plugin.version>3.16.0</compiler-plugin.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -17,7 +17,7 @@
         <skipITs>true</skipITs>
         <surefire-plugin.version>3.5.6</surefire-plugin.version>
         <mvnpm.medium-zoom.version>1.1.0</mvnpm.medium-zoom.version>
-        <mvnpm.highlightjs.version>11.11.1</mvnpm.highlightjs.version>
+        <mvnpm.highlightjs.version>11.12.0</mvnpm.highlightjs.version>
     </properties>
     <dependencyManagement>
         <dependencies>
